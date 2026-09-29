@@ -1,0 +1,27 @@
+# Short live test of the Pastebin Pro scraping API. Run from a machine that uses your whitelisted IP:
+#   python pystemon.py -c test-pastebin.yaml 2>&1 | Tee-Object pystemon-test.log      (PowerShell)
+#   python3 pystemon.py -c test-pastebin.yaml 2>&1 | tee pystemon-test.log             (Linux)
+# Stop with Ctrl+C after about 3 minutes.
+engine: re
+logging-level: INFO
+storage:
+  archive:
+    storage-classname: FileStorage
+    save: yes
+    save-all: yes
+    dir: "alerts"
+    dir-all: "archive"
+    compress: no
+email:
+  alert: no
+search:
+  - search: 'http'
+    description: 'test'
+threads: 1
+site:
+  pastebin.com_pro:
+    enable: yes
+    preset: pastebin
+    mode: scrape
+    limit: 20
+    max-size: 100000
