@@ -482,8 +482,9 @@ class PystemonConfig():
         for s in sites:
             if s.preset == 'pastebin':
                 if not (s.bind_ip or (yamlconfig.get('network') or {}).get('ip')):
-                    logger.warning("site {}: no bind-ip / network ip set. Pastebin only answers your whitelisted IP; "
-                                   "on a machine with several addresses set it.".format(s.name))
+                    logger.debug("site {}: no bind-ip / network ip set. Fine on a machine with one network; "
+                                 "with several (VPN, VMs) set bind-ip to the local address that leaves through "
+                                 "your whitelisted public IP.".format(s.name))
                 continue
             for url in (s.download_url, s.archive_url):
                 host = url.split('//', 1)[-1].split('/', 1)[0].lower()

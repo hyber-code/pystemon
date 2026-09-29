@@ -145,7 +145,8 @@ site:
     mode: scrape            # scrape = the Pro scraping API as it works today
                             # api    = for a future full API: set download-url, archive-url,
                             #          limit, throttling ... below to the new rules
-    # bind-ip: '203.0.113.5'   # your whitelisted IP (needed if the machine has several addresses)
+    # bind-ip: '192.168.1.50'  # LOCAL address of this machine, only needed if it has several networks/VPNs.
+    #                          # Pastebin sees your public IP (the whitelisted one), which is not set here.
     limit: 100              # pastes per poll (scrape mode: 1 to 250)
     # lang: php             # only this syntax (Pastebin's own filter)
     # metadata: yes         # also fetch each paste's metadata (doubles the requests)

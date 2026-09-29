@@ -183,11 +183,15 @@ def main(config):
 
     def request_reload(signal, frame):
         raise PystemonReloadRequested("reload requested")
-    signal.signal(signal.SIGHUP, request_reload)
 
     def request_queue_stats(signal, frame):
         raise PystemonQueueStatRequested("queues stats requested")
-    signal.signal(signal.SIGUSR1, request_queue_stats)
+
+    # SIGHUP and SIGUSR1 do not exist on Windows; Ctrl+C still stops the program there
+    if hasattr(signal, 'SIGHUP'):
+        signal.signal(signal.SIGHUP, request_reload)
+    if hasattr(signal, 'SIGUSR1'):
+        signal.signal(signal.SIGUSR1, request_queue_stats)
 
 
     # wait while all the threads are running and someone sends CTRL+C

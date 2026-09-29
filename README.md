@@ -59,7 +59,7 @@ site:
     preset: pastebin
     mode: scrape          # scrape = the Pro scraping API as it works today
                           # api    = a future full API: set the new URLs and limits in this block
-    bind-ip: '203.0.113.5'   # your whitelisted IP
+    # bind-ip: '192.168.1.50'  # optional: local address of this machine, only if it has several networks or VPNs
 ```
 
 What `mode: scrape` does for you, following Pastebin's rules: no proxy (only your whitelisted IP works),
