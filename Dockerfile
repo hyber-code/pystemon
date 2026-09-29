@@ -1,44 +1,31 @@
 #
-# Builder Stage
+# Builder stage: compile wheels (lxml) once, keep the compiler out of the final image
 #
-FROM python:3.9-alpine  AS builder
-
-# Set working directory
+FROM python:3.12-alpine AS builder
 WORKDIR /usr/src/app
-
-# Install dependencies 
-COPY ./requirements.txt .
-
-# Add needed packages
-RUN echo "\n===> Installing apk...\n" && \
-    apk add --update --no-cache g++ && \
-    apk add --no-cache gcc && \
-    apk add --no-cache libxslt-dev && \
-    echo "\n===> Python build Wheel archives for requirements...\n" && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /usr/src/app/wheels -r requirements.txt && \
-    echo "\n===> Removing package list...\n" && \
-    rm -rf /var/cache/apk/*
-
+COPY requirements.txt .
+RUN apk add --no-cache g++ gcc libxml2-dev libxslt-dev && \
+    pip wheel --no-cache-dir --wheel-dir /usr/src/app/wheels -r requirements.txt
 
 #
-# Runtime Stage
+# Runtime stage: small, non-root
 #
-FROM builder as RUNTIME
-
+FROM python:3.12-alpine
 LABEL name="pystemon" \
       description="Monitoring tool for PasteBin-alike sites written in Python" \
       url="https://github.com/cvandeplas/pystemon" \
       maintainer="christophe@vandeplas.com"
 
-WORKDIR /opt/pystemon
-
+RUN apk add --no-cache libxml2 libxslt && \
+    adduser -D -h /opt/pystemon pystemon
 COPY --from=builder /usr/src/app/wheels /wheels
+RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl && rm -rf /wheels
 
-RUN echo "\n===> Custom tuning...\n" && \
-    pip install --upgrade --no-cache pip && \
-    pip install --no-cache /wheels/*
-
-# copy project
-COPY . /opt/pystemon
-
-ENTRYPOINT ["/opt/pystemon/pystemon.py"]
+WORKDIR /opt/pystemon
+COPY --chown=pystemon:pystemon . /opt/pystemon
+# alerts, archive and the sqlite file are written to /data (mount a volume there)
+RUN mkdir -p /data && chown pystemon:pystemon /data
+USER pystemon
+VOLUME ["/data"]
+ENTRYPOINT ["python", "/opt/pystemon/pystemon.py"]
+CMD ["-c", "/opt/pystemon/pystemon.yaml"]

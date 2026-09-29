@@ -1,5 +1,6 @@
-PyYAML
-BeautifulSoup4
-lxml
-requests
-redis
+# Compatible-release pins: security fixes are still picked up, surprises are not.
+PyYAML>=6.0,<7
+beautifulsoup4>=4.12,<5
+lxml>=5.0,<7
+requests>=2.31,<3
+redis>=5.0,<9

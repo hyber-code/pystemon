@@ -1,17 +1,39 @@
 # Example startup unit for Pystemon.
-# Adapt for your installation.
-# Copy this file to /etc/systemd/system
-# Note that syslog configuration may be modified so all pystemon logs don't go in syslog. 
+# Adapt for your installation, copy to /etc/systemd/system and run:
+#   systemctl daemon-reload && systemctl enable --now pystemon
+#
+# Runs in the foreground (no -d): systemd supervises it and logs go to the journal.
 [Unit]
-Description=System-wide instance of Pystemon
-After=network.target
+Description=Pystemon (paste site monitor)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 User=pystemon
 Group=pystemon
 WorkingDirectory=/home/pystemon/pystemon/
-ExecStart=/home/pystemon/pystemon/pystemon.py -d
-Type=forking
-Restart=always
+ExecStart=/home/pystemon/pystemon/pystemon.py -c /home/pystemon/pystemon/pystemon.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+# Hardening: it only needs to write its own folder and reach the network.
+# (Not tested under every systemd version: if the service will not start, remove lines from this block.)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/home/pystemon/pystemon
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
 [Install]
 WantedBy=multi-user.target
