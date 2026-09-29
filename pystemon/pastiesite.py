@@ -1,14 +1,12 @@
 
 import logging.handlers
 import threading
-import time
 import random
 import os
 import json
 import traceback
 from collections import deque
 import importlib
-from pystemon.ua import PystemonUA
 from pystemon.pastie import Pastie
 
 logger = logging.getLogger('pystemon')

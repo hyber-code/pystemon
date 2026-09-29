@@ -131,7 +131,7 @@ class PystemonConfig():
         res = False
         try:
             res = self._configfile == other._configfile
-        except Exception as e:
+        except Exception:
             pass
         return res
 
@@ -390,7 +390,7 @@ class PystemonConfig():
                 archive_dir = storage_file.archive_dir
                 compress = storage_file.compress
                 storage_engines.append(storage_file)
-        except KeyError as e:
+        except KeyError:
             raise PystemonConfigException('archive was not found under storage, old pystemon.yaml config?')
 
         for storage in storage_yamlconfig.keys():
@@ -412,7 +412,7 @@ class PystemonConfig():
             if engine == 'regex':
                 logger.debug("Setting regex DEFAULT_VERSION to VERSION1")
                 re_module.DEFAULT_VERSION = re_module.VERSION1
-        except ImportError as e:
+        except ImportError:
             raise PystemonConfigException("unable to import module '{0}'".format(engine))
         return re_module
 

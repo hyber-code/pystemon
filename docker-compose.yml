@@ -1,0 +1,18 @@
+# Usage:  mkdir -p data && sudo chown 10001:10001 data && docker compose up -d
+# Logs:   docker compose logs -f
+services:
+  pystemon:
+    image: ghcr.io/hyber-code/pystemon:latest
+    # build: .            # use this line instead of "image:" to build from this folder
+    container_name: pystemon
+    restart: unless-stopped
+    volumes:
+      - ./docker/pystemon.yaml:/opt/pystemon/pystemon.yaml:ro
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

@@ -5,6 +5,8 @@ Monitoring tool for PasteBin-alike sites written in Python
 Copyleft AGPLv3 - Christophe Vandeplas - christophe@vandeplas.com  
 Feel free to use the code, but please share the changes you've made by doing Pull Requests! 
 
+**New here? Read the step-by-step guide: [docs/GUIDE.md](docs/GUIDE.md)** (Pastebin Pro setup, Linux/Proxmox, Windows, Docker, troubleshooting).
+
 Features:
 ---------
 * search for regular expressions in pasties
@@ -90,13 +92,10 @@ Render docker image with:
 docker build -t cvandeplas/pystemon:latest .
 ```
 
-Run it (the image runs as a normal user, not root; mount your config and a data folder,
-and point `dir` and `dir-all` in the config at `/data`):
+Run it with docker compose (the image runs as a normal user, not root; see `docs/GUIDE.md`):
 ```
-docker run -d --name pystemon --restart unless-stopped \
-  -v $PWD/pystemon.yaml:/opt/pystemon/pystemon.yaml:ro \
-  -v $PWD/data:/data \
-  cvandeplas/pystemon:latest
+mkdir -p data && sudo chown 10001:10001 data
+docker compose up -d
+docker compose logs -f
 ```
-Make the `data` folder writable for the container user (`chown 100:101 data` on the Alpine image, or run
-`docker run --rm cvandeplas/pystemon id`-style checks to see the ids).
+The settings are in `docker/pystemon.yaml`; found pastes are written to `./data`.

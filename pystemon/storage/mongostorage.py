@@ -1,5 +1,4 @@
 import logging.handlers
-import os
 from datetime import datetime
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError

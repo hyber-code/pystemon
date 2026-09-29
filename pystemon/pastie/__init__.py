@@ -4,14 +4,7 @@ import time
 import threading
 import traceback
 
-try:
-    from queue import Queue
-    from queue import Full
-    from queue import Empty
-except ImportError:
-    from Queue import Queue
-    from Queue import Full
-    from Queue import Empty
+from queue import Empty
 
 logger = logging.getLogger('pystemon')
 

@@ -17,7 +17,7 @@ LABEL name="pystemon" \
       maintainer="christophe@vandeplas.com"
 
 RUN apk add --no-cache libxml2 libxslt && \
-    adduser -D -h /opt/pystemon pystemon
+    adduser -D -u 10001 -h /opt/pystemon pystemon
 COPY --from=builder /usr/src/app/wheels /wheels
 RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl && rm -rf /wheels
 

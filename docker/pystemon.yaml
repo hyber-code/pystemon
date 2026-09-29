@@ -1,0 +1,47 @@
+# pystemon config for Docker. Mounted read-only into the container at /opt/pystemon/pystemon.yaml.
+# Everything it saves goes to /data, which is the ./data folder next to docker-compose.yml.
+engine: re
+logging-level: INFO
+save-thread: no
+
+storage:
+  archive:
+    storage-classname: FileStorage
+    save: yes               # keep the pastes that matched a search
+    save-all: no            # yes = keep every paste (uses a lot of disk)
+    dir: "/data/alerts"
+    dir-all: "/data/archive"
+    compress: yes
+
+email:
+  alert: no                 # set to yes and fill in the block below to get alert emails
+  from: alerts@example.com
+  to: you@example.com
+  server: smtp.example.com
+  port: 587
+  tls: yes
+  username: ''
+  password: ''
+  subject: '[pystemon] {subject}'
+  size-limit: 1048576
+
+# What to look for. Change these to your own words (regular expressions).
+search:
+  - search: 'example\.com'
+    description: 'my domain'
+  # - search: 'password'
+  #   count: 3
+  #   exclude: 'lorem ipsum'
+
+threads: 1
+
+site:
+  # Pastebin Pro scraping API. Whitelist the public IP of this machine on Pastebin first.
+  pastebin.com_pro:
+    enable: yes
+    preset: pastebin
+    mode: scrape            # change to "api" if Pastebin ever offers a full API
+    limit: 100
+    # lang: php
+    # max-size: 500000
+    # syntax-exclude: [text]
