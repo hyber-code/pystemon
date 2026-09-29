@@ -264,3 +264,19 @@ def test_throttler_spaces_requests():
     th.stop()
     th.join(5)
     assert elapsed >= 0.9            # 3 requests, 500 ms apart
+
+
+# ---------------------------------------------------------------- syntax names
+def test_syntax_list_and_typo_warning(caplog):
+    from pystemon.pastebin_syntaxes import PASTEBIN_SYNTAXES
+    assert {'php', 'python', 'cpp', 'csharp', 'text', 'dos', 'html5'} <= PASTEBIN_SYNTAXES
+    assert len(PASTEBIN_SYNTAXES) > 200
+    with caplog.at_level(logging.WARNING, logger='pystemon'):
+        site(lang='pyhton', **{'syntax-exclude': ['php', 'nonsense']})
+    text = caplog.text
+    assert "lang 'pyhton'" in text and 'python' in text     # typo caught, suggestion given
+    assert "'nonsense'" in text and "'php'" not in text
+
+
+def test_lang_is_sent_lowercase():
+    assert '&lang=php' in site(lang='PHP').archive_url

@@ -68,7 +68,7 @@ of the list, and the public link in alerts points to the normal paste page, neve
 pystemon refuses to start if the free `pastebin.com` site (which scrapes `/raw/*`) is enabled at the same time,
 because Pastebin blocks an IP that does both.
 
-Options in the same block: `limit`, `lang` (Pastebin's own language filter), `metadata: yes`,
+Options in the same block: `limit`, `lang` (Pastebin's own language filter; names from [Pastebin's syntax list](https://pastebin.com/doc_api), for example `php`, `python`, `cpp`, `csharp`, `dos` for batch files, `text` for plain text; a name that is not in the list gives a warning with a suggestion), `metadata: yes`,
 `min-size`, `max-size`, `syntax-include` and `syntax-exclude` (paste lists are filtered before anything is
 downloaded, so unwanted pastes cost no request).
 

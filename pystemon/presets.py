@@ -20,9 +20,11 @@ mode: api      for the day a full API is allowed. Today it starts from the same
                the site block to match the new rules. Limits above are then NOT
                enforced, so the person changing the mode is in charge.
 '''
+import difflib
 import logging.handlers
 
 from pystemon.exception import PystemonConfigException
+from pystemon.pastebin_syntaxes import PASTEBIN_SYNTAXES
 
 logger = logging.getLogger('pystemon')
 
@@ -31,9 +33,25 @@ PASTEBIN_MIN_INTERVAL = 60      # seconds between two polls of the list
 PASTEBIN_MIN_THROTTLING = 1000  # milliseconds between two requests
 
 
+def _check_syntaxes(conf):
+    '''Warn about syntax names Pastebin does not list (a typo silently gives an empty feed).'''
+    values = []
+    if conf.get('lang'):
+        values.append(('lang', str(conf['lang'])))
+    for key in ('syntax-include', 'syntax-exclude'):
+        for v in conf.get(key) or []:
+            values.append((key, str(v)))
+    for key, v in values:
+        if v.lower() not in PASTEBIN_SYNTAXES:
+            hint = difflib.get_close_matches(v.lower(), PASTEBIN_SYNTAXES, n=3)
+            logger.warning("preset pastebin: {} '{}' is not in Pastebin's syntax list{}".format(
+                key, v, " (did you mean: {}?)".format(', '.join(hint)) if hint else ''))
+
+
 def _pastebin(conf, mode):
     strict = (mode == 'scrape')
     out = {}
+    _check_syntaxes(conf)
     limit = int(conf.get('limit', 100))
     if strict and limit > PASTEBIN_MAX_LIMIT:
         logger.warning("preset pastebin: limit {} is above the documented maximum, using {}".format(limit, PASTEBIN_MAX_LIMIT))
@@ -42,7 +60,7 @@ def _pastebin(conf, mode):
         raise PystemonConfigException("preset pastebin: limit must be at least 1")
     url = 'https://scrape.pastebin.com/api_scraping.php?limit={}'.format(limit)
     if conf.get('lang'):
-        url += '&lang={}'.format(conf['lang'])
+        url += '&lang={}'.format(str(conf['lang']).lower())
     out['archive-url'] = url
     out['archive-format'] = 'json'
     out['archive-json-key'] = 'key'
