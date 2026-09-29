@@ -1,6 +1,5 @@
 import logging.handlers
 import threading
-import time
 import random
 import os
 
@@ -31,7 +30,6 @@ class ThreadProxyList(threading.Thread):
     def reset(self, wait=1):
         with self.condition:
             self.last_mtime = 0
-            self.filename = filename
             self.wait = wait
 
     def run(self):
@@ -62,10 +60,10 @@ class ProxyList():
 
     def monitor(self, wait=1):
         if self.thread_proxy_list:
-            self.thread_proxy_list.reset(self, wait)
+            self.thread_proxy_list.reset(wait)
         else:
             t = ThreadProxyList(self, wait)
-            t.setDaemon(True)
+            t.daemon = True
             self.thread_proxy_list = t
         return self.thread_proxy_list
 

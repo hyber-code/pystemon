@@ -1,12 +1,32 @@
 import logging.handlers
 logger = logging.getLogger('pystemon')
 
+def parse_flags(engine, text):
+    '''
+    Turn a string such as "re.I | re.M" (or "IGNORECASE|MULTILINE") into the
+    matching flag value, using only names that exist in the regex engine.
+    Nothing from the configuration file is ever evaluated as code.
+    '''
+    flags = 0
+    for token in str(text).split('|'):
+        name = token.strip().split('.')[-1]
+        if not name:
+            continue
+        if not name.isupper() or not name.isalpha():
+            raise ValueError("invalid regex flag '{}'".format(token.strip()))
+        try:
+            flags |= getattr(engine, name)
+        except AttributeError:
+            raise ValueError("unknown regex flag '{}'".format(token.strip()))
+    return flags
+
+
 class PastieSearch():
     def __init__(self, engine, regex):
         # set the re.FLAGS
         if 'regex-flags' in regex:
             self.regex_flags = regex['regex-flags']
-            self.flags = eval(self.regex_flags)
+            self.flags = parse_flags(engine, self.regex_flags)
         else:
             self.regex_flags = None
             self.flags = engine.IGNORECASE

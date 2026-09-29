@@ -2,6 +2,7 @@ import logging.handlers
 import hashlib
 import time
 import threading
+import traceback
 
 try:
     from queue import Queue
@@ -82,7 +83,11 @@ class Pastie():
     def hash_pastie(self):
         if self.pastie_content:
             try:
-                self.md5 = hashlib.md5(self.pastie_content).hexdigest()
+                try:
+                    # md5 is only a content fingerprint here, not a security feature
+                    self.md5 = hashlib.md5(self.pastie_content, usedforsecurity=False).hexdigest()
+                except TypeError:
+                    self.md5 = hashlib.md5(self.pastie_content).hexdigest()
                 logger.debug('Pastie {site} {id} has md5: "{md5}"'.format(site=self.site.name, id=self.id, md5=self.md5))
             except Exception as e:
                 logger.error('Pastie {site} {id} md5 problem: {e}'.format(site=self.site.name, id=self.id, e=e))

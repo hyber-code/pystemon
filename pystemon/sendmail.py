@@ -1,6 +1,7 @@
 
 import logging.handlers
 import smtplib
+import ssl
 try:
     from email.mime.multipart import MIMEMultipart
     from email.mime.base import MIMEBase
@@ -62,7 +63,7 @@ class PystemonSendmail():
         msg = MIMEMultipart()
         alert = "Found hit for {matches} in pastie {url}".format(matches=pastie.matches_to_text(), url=pastie.public_url)
         # headers
-        msg['Subject'] = self.subject.format(subject=alert)
+        msg['Subject'] = self.subject.format(subject=alert).replace('\r', ' ').replace('\n', ' ')
         msg['From'] = self.mailfrom
         # build the list of recipients
         recipients = []
@@ -73,13 +74,13 @@ class PystemonSendmail():
         msg['To'] = ','.join(recipients)  # here the list needs to be comma separated
         if len(pastie.pastie_content) > self.size_limit:
             part = MIMEBase('application', "text/plain")
-            part.set_payload(pastie.pastie_content.decode('utf8'))
+            part.set_payload(pastie.pastie_content.decode('utf8', errors='replace'))
             Encoders.encode_base64(part)
             part.add_header('Content-Disposition', 'attachment; filename="{id}.txt"'.format(id=pastie.id))
             msg.attach(part)
             content = "*** Content to large to be displayed, see attachment ***"
         else:
-            content = pastie.pastie_content.decode('utf8')
+            content = pastie.pastie_content.decode('utf8', errors='replace')
         # message body including full paste if not to large rather than attaching it
         message = '''
 I found a hit for a regular expression on one of the pastebin sites.
@@ -96,15 +97,16 @@ Below (after newline) is the content of the pastie:
         msg.attach(MIMEText(message))
         # send out the mail
         try:
-            s = smtplib.SMTP(self.server, self.port)
+            s = smtplib.SMTP(self.server, self.port, timeout=30)
             if self.tls:
-                s.starttls()
+                # verify the server certificate, otherwise the login can be intercepted
+                s.starttls(context=ssl.create_default_context())
             # login to the SMTP server if configured
             if self.username:
                 s.login(self.username, self.password)
             # send the mail
             s.sendmail(self.mailfrom, recipients, msg.as_string())
-            s.close()
+            s.quit()
         except smtplib.SMTPException as e:
             logger.error("ERROR: unable to send email: {0}".format(e))
         except Exception as e:

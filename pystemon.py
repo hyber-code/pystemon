@@ -11,47 +11,24 @@ To be implemented:
 - FIXME validate parsing of config file
 '''
 
-from datetime import datetime
 import logging.handlers
 import optparse
 import os
-import json
 import sys
 import signal
-import threading
-# LATER: multiprocessing to parse regex
-import time
 from io import open
-from pystemon.proxy import ProxyList
 from pystemon.ua import PystemonUA
 from pystemon.throttler import ThreadThrottler
 from pystemon.pastie import ThreadPasties
 from pystemon.pastiesite import PastieSite
-from pystemon.sendmail import PystemonSendmail
-from pystemon.storage import PastieStorage
 from pystemon.config import PystemonConfig
 from pystemon.storage import StorageSync, StorageThread, StorageDispatcher
-from pystemon.exception import *
+from pystemon.exception import (PystemonConfigEmpty, PystemonConfigException, PystemonException,
+                                PystemonQueueStatRequested, PystemonReloadRequested,
+                                PystemonStopRequested)
 
-try:
-    from urllib.error import HTTPError, URLError
-except ImportError:
-    from urllib2 import HTTPError, URLError
-try:
-    from urllib.parse import urlencode
-except ImportError:
-    from urllib import urlencode
-
-try:
-    import yaml
-except ImportError:
-    exit('ERROR: Cannot import the yaml Python library. Are you sure it is installed?')
-
-try:
-    if sys.version_info < (2, 7):
-        raise Exception
-except Exception:
-    exit('You need python version 2.7 or newer.')
+if sys.version_info < (3, 6):
+    exit('You need python version 3.6 or newer.')
 
 def load_config(config):
 
@@ -75,7 +52,7 @@ def load_config(config):
                 t = StorageThread(db)
                 threads.append(t)
                 storage.add_storage(t)
-                t.setDaemon(True)
+                t.daemon = True
             # save pasties synchronously
             else:
                 s = StorageSync(db)
@@ -94,27 +71,33 @@ def load_config(config):
     for site in config.sites:
         try:
 
+            # a site can opt out of the proxy list and can use its own source IP
+            site_proxies = config.proxies_list if site.use_proxy else None
+            site_ip = site.bind_ip or config.ip_addr
+
             throttler = None
             if site.throttling > 0:
                 logger.debug("enabling throttling on site {site}".format(site=site.name))
                 throttler = ThreadThrottler(site.name, site.throttling)
                 threads.append(throttler)
-                throttler.setDaemon(True)
+                throttler.daemon = True
 
             for i in range(config.threads):
                 name = "[ThreadPasties][{}][{}]".format(site.name, i+1)
-                user_agent = PystemonUA(name, config.proxies_list,
+                user_agent = PystemonUA(name, site_proxies,
                         user_agents_list = config.user_agents_list,
-                        throttler=throttler, ip_addr=config.ip_addr)
+                        throttler=throttler, ip_addr=site_ip,
+                        max_bytes=site.max_bytes)
                 t = ThreadPasties(user_agent, queue_name=site.name, queue=site.queue)
                 threads.append(t)
-                t.setDaemon(True)
+                t.daemon = True
 
             # Compressed is used to guess the filename, so it's mandatory to pass it along
             name = "[PastieSite][{}]".format(site.name)
-            site_ua=PystemonUA(name, config.proxies_list,
+            site_ua=PystemonUA(name, site_proxies,
                 user_agents_list = config.user_agents_list,
-                throttler = throttler, ip_addr = config.ip_addr)
+                throttler = throttler, ip_addr = site_ip,
+                max_bytes=site.max_bytes)
             t = PastieSite(site.name, site.download_url, site.archive_url, site.archive_regex,
                     site_public_url = site.public_url,
                     site_metadata_url = site.metadata_url,
@@ -124,6 +107,9 @@ def load_config(config):
                     site_save_dir = config.save_dir,
                     site_archive_dir = config.archive_dir,
                     archive_compress = config.compress,
+                    archive_format = site.archive_format,
+                    archive_json_key = site.archive_json_key,
+                    listing_filter = site.listing_filter,
                     site_ua=site_ua,
                     site_queue=site.queue,
                     patterns=config.patterns,
@@ -131,7 +117,7 @@ def load_config(config):
                     re=config.re_module)
             t.set_storage(storage)
             threads.append(t)
-            t.setDaemon(True)
+            t.daemon = True
             sites_loaded = sites_loaded + 1
         except Exception as e:
             logger.error('Unable to initialize pastie site {0}: {1}'.format(site.name, e))
@@ -189,8 +175,6 @@ def join_threads(threads, timeout=None, stop_requested=False):
 def main(config):
     res = 0
 
-    reload_requested = True
-    stop_requested = False
     threads = []
 
     def request_stop(signal, frame):
@@ -233,14 +217,14 @@ def main(config):
                 print('')
                 print("Ctrl-c received! Sending kill to threads...")
             stop_threads(threads)
-            join_threads(threads, timeout=max(1, config.max_throttling / 1000), stop_requested=stop_threads)
+            join_threads(threads, timeout=max(1, config.max_throttling / 1000), stop_requested=True)
             break
         except PystemonQueueStatRequested as e:
             logger.debug("{}".format(e))
             for site in config.sites:
                 try:
                     logger.info("{}: queue size={}".format(repr(site), site.queue.qsize()))
-                except:
+                except Exception:
                     pass
         except PystemonConfigException as e:
             logger.error('Pystemon[{}]: {}'.format(os.getpid(), e))
@@ -335,14 +319,14 @@ if __name__ == "__main__":
 
     # stop the software
     if options.kill:
-        pidfile = config.pidfile()
-        if os.path.isfile(pidfile):
+        pidfile = config.pidfile
+        if pidfile and os.path.isfile(pidfile):
             f = open(pidfile, 'r')
             pid = f.read()
             f.close()
             os.remove(pidfile)
             print("Sending signal to pid: {}".format(pid))
-            os.kill(int(pid), 2)
+            os.kill(int(pid), signal.SIGTERM)
             os._exit(0)
         else:
             print("PID file not found. Nothing to do.")

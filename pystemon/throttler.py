@@ -1,6 +1,5 @@
 import logging.handlers
 import threading
-import time
 
 try:
     from queue import Queue
@@ -65,14 +64,24 @@ class ThreadThrottler(threading.Thread):
         logger.info('ThreadThrottler[{}] started'.format(site))
         queue = self.queue
         try:
-            with self.condition:
-                while not self.kill_received:
-                    logger.debug("ThreadThrottler[{}]: waiting for a download request ...".format(site))
-                    consumer_lock = queue.get()
-                    logger.debug("ThreadThrottler[{}]: releasing download request".format(site))
-                    consumer_lock.set()
-                    queue.task_done()
-                    sleeptime = self._throttling/float(1000)
+            while True:
+                with self.condition:
+                    if self.kill_received:
+                        break
+                # Do NOT hold the lock while waiting for a request: stop() needs
+                # it, and shutdown would otherwise hang until the next download.
+                logger.debug("ThreadThrottler[{}]: waiting for a download request ...".format(site))
+                try:
+                    consumer_lock = queue.get(timeout=1)
+                except Empty:
+                    continue
+                logger.debug("ThreadThrottler[{}]: releasing download request".format(site))
+                consumer_lock.set()
+                queue.task_done()
+                with self.condition:
+                    if self.kill_received:
+                        break
+                    sleeptime = self._throttling / float(1000)
                     logger.debug("ThreadThrottler[{}]: now waiting {} second(s) ...".format(site, sleeptime))
                     self.condition.wait(sleeptime)
         except Exception as e:
@@ -86,7 +95,7 @@ class ThreadThrottler(threading.Thread):
                 queue.task_done()
             except Empty:
                 break
-            except Exception as e:
+            except Exception:
                 pass
         logger.info('ThreadThrottler[{}] exited'.format(site))
 
