@@ -4,6 +4,8 @@ import threading
 import time
 import random
 import os
+import json
+import traceback
 from collections import deque
 import importlib
 from pystemon.ua import PystemonUA
@@ -60,6 +62,9 @@ class PastieSite(threading.Thread):
             self.metadata_url = kwargs['site_metadata_url']
 
         self.archive_compress = kwargs.get('archive_compress', False)
+        self.archive_format = kwargs.get('archive_format', 'regex')
+        self.archive_json_key = kwargs.get('archive_json_key', 'key')
+        self.listing_filter = kwargs.get('listing_filter') or {}
         self.update_min = kwargs['site_update_min']
         self.update_max = kwargs['site_update_max']
         self.queue = kwargs['site_queue']
@@ -97,7 +102,7 @@ class PastieSite(threading.Thread):
                     and
                     (self.archive_url == other.archive_url)
                     and
-                    (self.metadata_url == self.metadata_url) )
+                    (self.metadata_url == other.metadata_url) )
         except Exception as e:
             logger.error("unable to compare PastieSite instances: {}".format(e))
             pass
@@ -175,7 +180,10 @@ class PastieSite(threading.Thread):
         if not htmlPage:
             logger.warning("No HTML content for page {url}".format(url=self.archive_url))
             return False
-        pasties_ids = self.re.findall(self.archive_regex, htmlPage)
+        if self.archive_format == 'json':
+            pasties_ids = self.ids_from_json(htmlPage)
+        else:
+            pasties_ids = self.re.findall(self.archive_regex, htmlPage)
         if pasties_ids:
             for pastie_id in pasties_ids:
                 # check if the pastie was already downloaded
@@ -192,6 +200,40 @@ class PastieSite(threading.Thread):
             return pasties
         logger.error("No last pasties matches for regular expression site:{site} regex:{regex}. Error in your regex? Dumping htmlPage \n {html}".format(site=self.name, regex=self.archive_regex, html=htmlPage))
         return False
+
+    def ids_from_json(self, text):
+        '''
+        Read the list of recent pasties from a JSON document (for example the
+        Pastebin scraping API) and apply the cheap listing filters, so unwanted
+        pastes are never downloaded.
+        '''
+        try:
+            entries = json.loads(text)
+        except ValueError as e:
+            logger.error("{}: the archive page is not valid JSON: {}".format(self.name, e))
+            return []
+        if isinstance(entries, dict):
+            entries = [entries]
+        f = self.listing_filter
+        ids = []
+        for entry in entries:
+            if not isinstance(entry, dict) or self.archive_json_key not in entry:
+                continue
+            try:
+                size = int(entry.get('size', 0))
+            except (TypeError, ValueError):
+                size = 0
+            syntax = str(entry.get('syntax', '')).lower()
+            if f.get('min-size') and size < f['min-size']:
+                continue
+            if f.get('max-size') and size > f['max-size']:
+                continue
+            if f.get('syntax-include') and syntax not in f['syntax-include']:
+                continue
+            if syntax in f.get('syntax-exclude', ()):
+                continue
+            ids.append(str(entry[self.archive_json_key]))
+        return ids
 
     def seen_pastie(self, pastie_id, **kwargs):
         ''' check if the pastie was already downloaded. '''

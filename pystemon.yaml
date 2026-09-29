@@ -1,5 +1,6 @@
-network:               # Network settings
-  ip: '172.17.85.12'        # Specify source IP address if you want to bind on a specific one
+# network:              # Network settings
+#   ip: '203.0.113.5'       # Source IP for all downloads. Uncomment and set it only if you need a specific one.
+#                           # Sites can also set their own with bind-ip.
 
 pid:
   filename: '/var/run/pystemon.pid'
@@ -121,6 +122,8 @@ site:
 #    pastie-classname:  # OPTIONAL: The name of a custom Class that inherits from Pastie
 #                       # This is practical for sites that require custom fetchPastie() functions
 
+  # Free scraping of the Pastebin web pages. Pastebin does not allow this together
+  # with the Pro scraping API from the same IP: keep it disabled if you use the Pro block below.
   pastebin.com:
     enable: no
     archive-url: 'https://pastebin.com/archive'
@@ -130,18 +133,26 @@ site:
     update-min: 40
     throttling: 5000
 
-  # Note: The official scraping has been discontinued: https://twitter.com/pastebin/status/1250455777069817856?s=20
-  # See https://pastebin.com/api_scraping_faq , you will need a pro account on pastebin
+  # Pastebin Pro scraping API: https://pastebin.com/doc_scraping_api
+  # Needs a Pro account with ONE whitelisted IP (Pastebin > Scraping API page).
+  # preset + mode apply Pastebin's documented rules for you (1 request per second,
+  # one poll a minute, limit 250 at most, no proxy, JSON parsing).
+  # Do NOT enable the free "pastebin.com" site below on the same machine: Pastebin
+  # blocks an IP that scrapes its web pages and /raw/* while using the API.
   pastebin.com_pro:
     enable: no
-    archive-url: 'https://scrape.pastebin.com/api_scraping.php?limit=500'
-    archive-regex: '"key": "(.+)",'
-    download-url: 'https://scrape.pastebin.com/api_scrape_item.php?i={id}'
-    public-url: 'https://pastebin.com/raw/{id}'
-    metadata-url: 'https://scrape.pastebin.com/api_scrape_item_meta.php?i={id}'
-    update-max: 50
-    update-min: 40
-    throttling: 1000
+    preset: pastebin
+    mode: scrape            # scrape = the Pro scraping API as it works today
+                            # api    = for a future full API: set download-url, archive-url,
+                            #          limit, throttling ... below to the new rules
+    # bind-ip: '203.0.113.5'   # your whitelisted IP (needed if the machine has several addresses)
+    limit: 100              # pastes per poll (scrape mode: 1 to 250)
+    # lang: php             # only this syntax (Pastebin's own filter)
+    # metadata: yes         # also fetch each paste's metadata (doubles the requests)
+    # min-size: 20          # skip pastes smaller than this many bytes
+    # max-size: 500000      # skip pastes bigger than this (default 1 MB)
+    # syntax-exclude: [text]    # skip these syntaxes without downloading them
+    # syntax-include: [php, python]   # or: only download these
 
   slexy.org:
     # note: they don't like scraping. Tuning of update-max and update-min is needed!

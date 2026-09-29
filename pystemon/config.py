@@ -13,6 +13,7 @@ from pystemon.storage import PastieStorage
 from pystemon.proxy import ProxyList
 from pystemon.pastiesearch import PastieSearch
 from pystemon.exception import PystemonConfigException
+from pystemon.presets import apply_preset
 
 logger = logging.getLogger('pystemon')
 
@@ -20,9 +21,28 @@ class SiteConfig():
     def __init__(self, name, config):
         self.name = name
         self._queue = None
+        self.preset = config.get('preset')
+        self.mode = config.get('mode')
+        config = apply_preset(name, config)
         self.download_url = config['download-url']
         self.archive_url = config['archive-url']
-        self.archive_regex = config['archive-regex']
+        self.archive_format = str(config.get('archive-format', 'regex')).lower()
+        if self.archive_format not in ('regex', 'json'):
+            raise PystemonConfigException("site {}: archive-format must be regex or json".format(name))
+        self.archive_json_key = config.get('archive-json-key', 'key')
+        # the regex is only needed when the archive page is HTML
+        self.archive_regex = config.get('archive-regex')
+        if self.archive_format == 'regex' and not self.archive_regex:
+            raise PystemonConfigException("site {}: archive-regex is required".format(name))
+        self.use_proxy = bool(config.get('use-proxy', True))
+        self.bind_ip = config.get('bind-ip')
+        self.max_bytes = int(config.get('max-size', 5 * 1024 * 1024))
+        self.listing_filter = {
+            'min-size': int(config.get('min-size', 0) or 0),
+            'max-size': int(config.get('max-size', 0) or 0) if self.preset else 0,
+            'syntax-include': [str(x).lower() for x in config.get('syntax-include', [])],
+            'syntax-exclude': [str(x).lower() for x in config.get('syntax-exclude', [])],
+        }
         self.throttling = config.get('throttling', 0)
         self.public_url= config.get('public-url')
         self.metadata_url = config.get('metadata-url')
@@ -65,6 +85,12 @@ class SiteConfig():
                     (self.public_url == other.public_url)
                     and
                     (self.metadata_url == other.metadata_url)
+                    and
+                    (self.archive_format == other.archive_format)
+                    and
+                    (self.use_proxy == other.use_proxy)
+                    and
+                    (self.bind_ip == other.bind_ip)
                     and
                     (self.pastie_classname == other.pastie_classname) )
         except Exception as e:
@@ -253,11 +279,10 @@ class PystemonConfig():
             except KeyError:
                 raise PystemonConfigException('random user-agent requested but no file provided')
 
-        try:
-            ip_addr = yamlconfig['network']['ip']
-        except KeyError:
+        # source IP to use for all downloads (a site can override it with bind-ip)
+        config['ip_addr'] = (yamlconfig.get('network') or {}).get('ip') or None
+        if config['ip_addr'] is None:
             logger.debug("Using default IP address")
-            pass
 
         config['sendmail'] = self._load_email(yamlconfig)
         res = self._load_storage_engines(yamlconfig)
@@ -443,6 +468,27 @@ class PystemonConfig():
                 logger.info("Site: {} is disabled.".format(site))
             else:
                 logger.warning("Site: {} is not enabled or disabled in config file. We just assume it disabled.".format(site))
+        self._check_site_rules(sites_enabled, yamlconfig)
         logger.debug("successfully loaded {0}/{1} enabled site(s)".format(len(sites_enabled), count_enabled))
         return sites_enabled
+
+    def _check_site_rules(self, sites, yamlconfig):
+        '''
+        Refuse combinations that would get the whitelisted Pastebin IP blocked:
+        Pastebin blocks an IP that uses the scraping API AND scrapes its web pages.
+        '''
+        if not any(s.preset == 'pastebin' for s in sites):
+            return
+        for s in sites:
+            if s.preset == 'pastebin':
+                if not (s.bind_ip or (yamlconfig.get('network') or {}).get('ip')):
+                    logger.warning("site {}: no bind-ip / network ip set. Pastebin only answers your whitelisted IP; "
+                                   "on a machine with several addresses set it.".format(s.name))
+                continue
+            for url in (s.download_url, s.archive_url):
+                host = url.split('//', 1)[-1].split('/', 1)[0].lower()
+                if host in ('pastebin.com', 'www.pastebin.com'):
+                    raise PystemonConfigException(
+                        "site {} scrapes pastebin.com web pages while the Pastebin scraping API is enabled. "
+                        "Pastebin blocks the IP for that. Disable one of them.".format(s.name))
 
