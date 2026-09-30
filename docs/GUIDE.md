@@ -112,14 +112,15 @@ The image is small, runs as a normal user (id 10001), and needs no ports.
 git clone https://github.com/hyber-code/pystemon.git && cd pystemon
 nano docker/pystemon.yaml                       # set your search patterns, email, and so on
 mkdir -p data && sudo chown 10001:10001 data    # results are written here
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f
 ```
 
-- The compose file uses the published image `ghcr.io/hyber-code/pystemon:latest` (built for amd64 and arm64
-  by GitHub Actions). If the image cannot be pulled, either make the package public in GitHub (Packages, your
-  package, Package settings, Change visibility) or replace the `image:` line by `build: .`.
-- Stop: `docker compose down`. Update: `docker compose pull && docker compose up -d`.
+- The compose file builds the image on your own machine, so nothing needs to be downloaded or published.
+  The first build takes a few minutes. A ready-made image for x86 and ARM (Raspberry Pi) is also published
+  by GitHub Actions at `ghcr.io/hyber-code/pystemon:latest`; to use it, follow the comment in
+  `docker-compose.yml` and make the package public on GitHub first.
+- Stop: `docker compose down`. Update: `git pull && docker compose up -d --build`.
 - The container goes out through the host's public IP, so whitelist that one.
 
 ## 6. Configuration cheat sheet

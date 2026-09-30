@@ -1,9 +1,13 @@
-# Usage:  mkdir -p data && sudo chown 10001:10001 data && docker compose up -d
+# Usage:  mkdir -p data && sudo chown 10001:10001 data && docker compose up -d --build
 # Logs:   docker compose logs -f
 services:
   pystemon:
-    image: ghcr.io/hyber-code/pystemon:latest
-    # build: .            # use this line instead of "image:" to build from this folder
+    # Builds the image on your own machine from this folder (no account or download needed).
+    build: .
+    image: pystemon:local
+    # To use the ready-made image from GitHub instead, delete the two lines above and use:
+    # image: ghcr.io/hyber-code/pystemon:latest
+    # (the package must be made public on GitHub first)
     container_name: pystemon
     restart: unless-stopped
     volumes:

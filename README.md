@@ -95,7 +95,7 @@ docker build -t cvandeplas/pystemon:latest .
 Run it with docker compose (the image runs as a normal user, not root; see `docs/GUIDE.md`):
 ```
 mkdir -p data && sudo chown 10001:10001 data
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f
 ```
 The settings are in `docker/pystemon.yaml`; found pastes are written to `./data`.
