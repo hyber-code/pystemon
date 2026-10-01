@@ -304,3 +304,29 @@ def test_filestorage_save_all_off_keeps_only_matches(tmp_path):
                                            'save': True, 'save-all': True, 'compress': False})
     everything.__save_pastie__(paste('miss2', False))
     assert [p.name for p in (tmp_path / 'b2').rglob('*') if p.is_file()] == ['miss2']
+
+
+def test_webui_starred_pastes_are_protected(tmp_path):
+    """A starred paste survives delete; unstarring makes it deletable; stars persist in a file."""
+    from pystemon.webui import Store
+    alerts = tmp_path / 'data' / 'alerts' / 'site' / '2026' / '10' / '01'
+    alerts.mkdir(parents=True)
+    (alerts / 'keep').write_bytes(b'a')
+    (alerts / 'drop').write_bytes(b'b')
+    cfg = tmp_path / 'p.yaml'
+    cfg.write_text("storage:\n  archive:\n    storage-classname: FileStorage\n    save: yes\n    dir: '%s'\n" % (tmp_path / 'data' / 'alerts'))
+    store = Store(str(cfg))
+    files = {f['name']: f for f in store.listing()['files']}
+    assert not files['keep']['fav']
+    store.set_fav(files['keep']['id'], True)
+    assert Store(str(cfg)).listing()['files'][0]['fav'] or any(f['fav'] for f in Store(str(cfg)).listing()['files'])
+    removed, kept = store.delete([files['keep']['id'], files['drop']['id']])
+    assert (removed, kept) == (1, 1)
+    assert (alerts / 'keep').exists() and not (alerts / 'drop').exists()
+    store.set_fav(files['keep']['id'], False)
+    assert store.delete([files['keep']['id']]) == (1, 0)
+    try:
+        store.set_fav('0:site/2026/10/01/missing', True)
+        assert False, 'should refuse a missing paste'
+    except ValueError:
+        pass

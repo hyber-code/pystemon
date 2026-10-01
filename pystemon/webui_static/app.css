@@ -21,7 +21,10 @@ input,textarea,select{font:inherit;color:inherit;background:var(--bg);border:1px
 #pastes{display:flex}
 aside{width:340px;max-width:45vw;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel)}
 .bar{display:flex;gap:8px;align-items:center;padding:6px 10px}
-.bar input[type=search]{width:100%}
+.bar input[type=search]{flex:1;min-width:0}
+#btnStarOnly{white-space:nowrap}
+.star{background:none;border:0;padding:0 2px;font:17px/1 "Segoe UI Symbol","DejaVu Sans","Noto Sans Symbols 2",sans-serif;cursor:pointer;color:var(--muted)}
+.star.on{background:none;border:0;color:#e3a008}
 #tree{flex:1;overflow:auto}
 .grp{padding:3px 8px;font-weight:600;cursor:pointer;display:flex;gap:6px;align-items:center;user-select:none}
 .grp .n{margin-left:auto;font-weight:400;color:var(--muted)}

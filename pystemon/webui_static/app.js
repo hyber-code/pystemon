@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var state = { files: [], roots: [], selected: {}, current: null, closed: {}, cfg: null, shown: [] };
+  var state = { files: [], roots: [], selected: {}, current: null, closed: {}, cfg: null, shown: [], starOnly: false };
 
   function api(path, body) {
     var opt = { cache: 'no-store' };
@@ -60,7 +60,7 @@
   control('btnStart', 'start'); control('btnStop', 'stop'); control('btnRestart', 'restart');
 
   // ---- tree
-  function matches(f, q) { return !q || (f.name + ' ' + f.site + ' ' + f.day).toLowerCase().indexOf(q) >= 0; }
+  function matches(f, q) { if (state.starOnly && !f.fav) { return false; } return !q || (f.name + ' ' + f.site + ' ' + f.day).toLowerCase().indexOf(q) >= 0; }
   function renderTree() {
     var q = $('filter').value.trim().toLowerCase();
     var tree = $('tree'); tree.textContent = '';
@@ -94,6 +94,14 @@
           row.appendChild(c);
           row.appendChild(el('span', 'nm', (f.site ? f.site + ' / ' : '') + f.name));
           row.appendChild(el('span', 'sz', human(f.size)));
+          var star = el('button', 'star' + (f.fav ? ' on' : ''), f.fav ? '\u2605\uFE0E' : '\u2606\uFE0E');
+          star.title = f.fav ? 'Starred (protected from delete). Tap to unstar' : 'Star this paste';
+          star.setAttribute('aria-label', star.title);
+          star.onclick = function (ev) {
+            ev.stopPropagation();
+            api('star', { id: f.id, on: !f.fav }).then(function (r) { f.fav = r.fav; renderTree(); }).catch(function (e) { toast(e.message); });
+          };
+          row.appendChild(star);
           row.onclick = function () { openPaste(f); };
           tree.appendChild(row);
         });
@@ -114,11 +122,21 @@
     renderTree();
   };
   $('filter').oninput = renderTree;
+  $('btnStarOnly').onclick = function () {
+    state.starOnly = !state.starOnly;
+    this.classList.toggle('on', state.starOnly);
+    this.textContent = (state.starOnly ? '\u2605\uFE0E' : '\u2606\uFE0E') + ' Starred';
+    renderTree();
+  };
   $('btnDelete').onclick = function () {
-    var ids = Object.keys(state.selected);
-    if (!ids.length || !confirm('Delete ' + ids.length + ' paste(s) from the disk? This cannot be undone.')) { return; }
+    var starred = {};
+    state.files.forEach(function (f) { if (f.fav) { starred[f.id] = 1; } });
+    var picked = Object.keys(state.selected), ids = picked.filter(function (i) { return !starred[i]; });
+    var skipped = picked.length - ids.length;
+    if (!ids.length) { toast(skipped ? 'Only starred pastes selected, nothing deleted. Unstar first to delete.' : 'Nothing selected'); return; }
+    if (!confirm('Delete ' + ids.length + ' paste(s) from the disk? This cannot be undone.' + (skipped ? ' (' + skipped + ' starred will be kept.)' : ''))) { return; }
     api('delete', { ids: ids }).then(function (r) {
-      toast('Deleted ' + r.deleted);
+      toast('Deleted ' + r.deleted + (skipped ? ', kept ' + skipped + ' starred' : ''));
       state.selected = {};
       if (state.current && ids.indexOf(state.current) >= 0) { state.current = null; $('pastes').classList.add('noview'); $('vbody').textContent = ''; $('vhead').textContent = 'Pick a paste on the left'; }
       return loadList();

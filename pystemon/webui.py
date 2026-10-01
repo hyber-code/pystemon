@@ -258,6 +258,49 @@ class Store:
 
     def __init__(self, config_path):
         self.config_path = config_path
+        self._favlock = threading.Lock()
+
+    # -- favourites (starred pastes), kept in favourites.json next to the alerts folder
+    def _fav_file(self):
+        roots = self.roots()
+        if not roots:
+            return None
+        return os.path.join(os.path.dirname(roots[0]['path']), 'favourites.json')
+
+    @staticmethod
+    def _rel(ident):
+        return ident.split(':', 1)[1] if ':' in ident else ident
+
+    def favourites(self):
+        path = self._fav_file()
+        try:
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+            return set(str(x) for x in data) if isinstance(data, list) else set()
+        except (OSError, ValueError, TypeError):
+            return set()
+
+    def _write_favs(self, favs):
+        path = self._fav_file()
+        if not path:
+            raise ValueError('no storage folder found for favourites')
+        tmp = path + '.new'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(sorted(favs), f)
+        os.replace(tmp, path)
+
+    def set_fav(self, ident, on):
+        if not self.resolve(ident):
+            raise ValueError('paste not found')
+        rel = self._rel(ident)
+        with self._favlock:
+            favs = self.favourites()
+            if on:
+                favs.add(rel)
+            else:
+                favs.discard(rel)
+            self._write_favs(favs)
+        return on
 
     def roots(self):
         data = load_yaml(self.config_path)
@@ -286,6 +329,7 @@ class Store:
         return full, root
 
     def listing(self):
+        favs = self.favourites()
         files = []
         for i, root in enumerate(self.roots()):
             for dirpath, _dirs, names in os.walk(root['path']):
@@ -303,7 +347,7 @@ class Store:
                     site = parts[0] if len(parts) > 4 else ''
                     day = '-'.join(parts[1:4]) if len(parts) > 4 else 'other'
                     files.append({'id': '{}:{}'.format(i, rel), 'root': i, 'site': site, 'day': day,
-                                  'name': n, 'size': st.st_size, 'mtime': int(st.st_mtime)})
+                                  'name': n, 'size': st.st_size, 'mtime': int(st.st_mtime), 'fav': rel in favs})
         files.sort(key=lambda f: f['mtime'], reverse=True)
         total = len(files)
         return {'roots': [r['label'] for r in self.roots()], 'files': files[:MAX_LIST], 'total': total}
@@ -333,10 +377,15 @@ class Store:
                 'size': os.path.getsize(path), 'meta': meta}
 
     def delete(self, idents):
-        removed = 0
+        """Delete pastes, but never a starred one. Returns (deleted, kept_because_starred)."""
+        removed = kept = 0
+        favs = self.favourites()
         for ident in idents[:MAX_DELETE]:
             found = self.resolve(ident)
             if not found:
+                continue
+            if self._rel(ident) in favs:
+                kept += 1
                 continue
             path, root = found
             for p in (path, path + '.metadata'):
@@ -352,7 +401,7 @@ class Store:
                 except OSError:
                     break
                 d = os.path.dirname(d)
-        return removed
+        return removed, kept
 
 
 def find_hits(text, data):
@@ -525,8 +574,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ids = body.get('ids')
                 if not isinstance(ids, list):
                     return self._send(400, {'error': 'ids must be a list'})
-                n = self.server.store.delete([str(i) for i in ids])
-                return self._send(200, {'ok': True, 'deleted': n})
+                n, kept = self.server.store.delete([str(i) for i in ids])
+                return self._send(200, {'ok': True, 'deleted': n, 'kept_starred': kept})
+            elif path == '/api/star':
+                on = self.server.store.set_fav(str(body.get('id', '')), bool(body.get('on')))
+                return self._send(200, {'ok': True, 'fav': on})
             elif path == '/api/config':
                 text = body.get('raw')
                 if text is None:
