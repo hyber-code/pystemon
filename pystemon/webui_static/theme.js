@@ -6,7 +6,7 @@
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.getElementById('btnTheme');
     if (!b) { return; }
-    function label() { b.textContent = 'Theme: ' + get(); }
+    function label() { b.textContent = '\u25D0 ' + get(); }
     label();
     b.onclick = function () {
       var next = { system: 'light', light: 'dark', dark: 'system' }[get()] || 'system';

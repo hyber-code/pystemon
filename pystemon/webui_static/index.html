@@ -9,14 +9,18 @@
 </head>
 <body>
 <header>
-  <strong>pystemon</strong>
-  <span id="state" class="pill">...</span>
-  <span id="uptime" class="muted"></span>
-  <span class="spacer"></span>
-  <button id="btnStart">Start</button>
-  <button id="btnStop">Stop</button>
-  <button id="btnRestart">Restart</button>
-  <button id="btnTheme" title="Colour theme: system, light or dark">Theme: system</button>
+  <div class="hrow top">
+    <strong>pystemon</strong>
+    <span id="state" class="pill">...</span>
+    <span id="uptime" class="muted"></span>
+    <span class="spacer"></span>
+    <button id="btnTheme" title="Colour theme: system, light or dark">&#9680; system</button>
+  </div>
+  <div class="hrow ctl">
+    <button id="btnStart">Start</button>
+    <button id="btnStop">Stop</button>
+    <button id="btnRestart">Restart</button>
+  </div>
   <nav>
     <button class="tab on" data-tab="pastes">Pastes</button>
     <button class="tab" data-tab="settings">Settings</button>
