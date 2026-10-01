@@ -210,7 +210,8 @@ def public_view(data):
     for item in data.get('search') or []:
         if isinstance(item, dict):
             search.append({'search': str(item.get('search', '')), 'description': str(item.get('description') or ''),
-                           'count': item.get('count'), 'exclude': item.get('exclude') or ''})
+                           'count': item.get('count'), 'exclude': item.get('exclude') or '',
+                           'query': item.get('query') or ''})
     return {'search': search, 'sites': sites,
             'network_ip': (data.get('network') or {}).get('ip') or '',
             'email_alert': bool((data.get('email') or {}).get('alert')),
@@ -233,6 +234,8 @@ def apply_form(data, form):
                 entry['count'] = int(item['count'])
             if str(item.get('exclude') or '').strip():
                 entry['exclude'] = str(item['exclude']).strip()
+            if str(item.get('query') or '').strip():
+                entry['query'] = str(item['query']).strip()
             new.append(entry)
         data['search'] = new
     if 'channels' in form:
@@ -314,6 +317,41 @@ class Store:
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(sorted(favs), f)
         os.replace(tmp, path)
+
+    # -- channels found by tgwatch's Telegram search (discovered.json is written by tgwatch, dismissed.json by the page)
+    def _data_dir(self):
+        path = self._fav_file()
+        return os.path.dirname(path) if path else None
+
+    def discovered(self, watched):
+        from pystemon import tgwatch
+        d = self._data_dir()
+        if not d:
+            return []
+        disc = tgwatch.load_discovered(os.path.join(d, 'discovered.json'))
+        try:
+            with open(os.path.join(d, 'dismissed.json'), encoding='utf-8') as f:
+                dismissed = set(str(x).lower() for x in json.load(f))
+        except (OSError, ValueError, TypeError):
+            dismissed = set()
+        skip = dismissed | set(w.lower() for w in watched)
+        out = [dict(name=n, title=e.get('title', n), hits=e.get('hits', 0), via=e.get('via', []), last=e.get('last', 0))
+               for n, e in disc['channels'].items() if n.lower() not in skip]
+        return sorted(out, key=lambda e: (-e['hits'], e['name'].lower()))[:100]
+
+    def dismiss_channel(self, name):
+        d = self._data_dir()
+        path = os.path.join(d, 'dismissed.json')
+        try:
+            with open(path, encoding='utf-8') as f:
+                cur = json.load(f)
+        except (OSError, ValueError):
+            cur = []
+        if name.lower() not in [str(x).lower() for x in cur]:
+            cur.append(name)
+        with open(path + '.new', 'w', encoding='utf-8') as f:
+            json.dump(cur, f)
+        os.replace(path + '.new', path)
 
     # -- whitelisted-IP bookkeeping: remembers which public IP the user confirmed at Pastebin
     def _ip_file(self):
@@ -647,6 +685,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 with open(self.server.config_path, encoding='utf-8') as f:
                     raw = f.read()
                 return self._send(200, {'form': public_view(load_yaml(self.server.config_path)), 'raw': raw})
+            if path == '/api/discovered':
+                from pystemon import tgwatch
+                cfg = load_yaml(self.server.config_path)
+                watched = [tgwatch.normalise_channel(c) for c in cfg.get('channels') or []]
+                return self._send(200, {'channels': self.server.store.discovered([w for w in watched if w])})
             if path == '/api/publicip':
                 ip = public_ip(cached=True)
                 return self._send(200, {'ip': ip, 'ack': self.server.store.ip_ack()})
@@ -683,6 +726,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif path == '/api/star':
                 on = self.server.store.set_fav(str(body.get('id', '')), bool(body.get('on')))
                 return self._send(200, {'ok': True, 'fav': on})
+            elif path == '/api/discovered':
+                from pystemon import tgwatch
+                name = tgwatch.normalise_channel(str(body.get('name', '')))
+                if not name:
+                    raise ValueError('not a channel name')
+                if body.get('action') == 'dismiss':
+                    self.server.store.dismiss_channel(name)
+                    return self._send(200, {'ok': True})
+                if body.get('action') != 'add':
+                    raise ValueError('unknown action')
+                data = load_yaml(self.server.config_path)
+                chans = [str(c) for c in data.get('channels') or []]
+                data = apply_form(data, {'channels': chans + ['@' + name]})
+                text = yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
+                validate_text(self.server.config_path, text)
+                write_config(self.server.config_path, text)
+                applied = sc.reload()[1] if sc.running() else ''
+                return self._send(200, {'ok': True, 'applied': applied})
             elif path == '/api/config':
                 text = body.get('raw')
                 if text is None:

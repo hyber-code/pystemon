@@ -404,3 +404,46 @@ def test_webui_telegram_mode_form(tmp_path, monkeypatch):
         pass
     webui.validate_text(str(tmp_path / 'x.yaml'), webui.yaml.safe_dump(data))
     assert webui.public_view(data)['channels'] == ['@Alpha_One', '@beta_two']
+
+
+def test_tgwatch_discovery_keeps_only_rule_confirmed_posts(tmp_path):
+    """Telegram's fuzzy post search is filtered by our own rules; channels are listed once, repeats are not saved twice."""
+    import datetime
+    from types import SimpleNamespace as NS
+    from pystemon import tgwatch
+    assert tgwatch.discovery_query({'search': 'iptv'}) == 'iptv'
+    assert tgwatch.discovery_query({'search': r'mega\.nz'}) == 'mega.nz'
+    assert tgwatch.discovery_query({'search': r'(a|b)\.com'}) == ''
+    assert tgwatch.discovery_query({'search': r'(a|b)\.com', 'query': 'a b'}) == 'a b'
+    alerts = tmp_path / 'data' / 'alerts'
+    cfg = {'storage': {'a': {'storage-classname': 'FileStorage', 'dir': str(alerts)}}}
+    patterns = tgwatch.compile_patterns([{'search': 'iptv', 'description': 'iptv'}])
+    when = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.timezone.utc)
+    chats = [NS(id=1, username='good_chan', title='Good'), NS(id=2, username=None, title='No name'), NS(id=3, username='other', title='Other')]
+    msgs = [NS(id=5, date=when, message='fresh IPTV list', peer_id=NS(channel_id=1)),
+            NS(id=6, date=when, message='unrelated', peer_id=NS(channel_id=3)),
+            NS(id=7, date=when, message='iptv but private', peer_id=NS(channel_id=2))]
+    res = NS(messages=msgs, chats=chats)
+    disc = tgwatch.load_discovered(str(tmp_path / 'none.json'))
+    assert tgwatch.process_post_results(cfg, patterns, 'iptv', res, disc, 100) == 1
+    assert tgwatch.process_post_results(cfg, patterns, 'iptv', res, disc, 200) == 0   # repeat: nothing new
+    assert list(disc['channels']) == ['good_chan'] and disc['channels']['good_chan']['hits'] == 1
+    name_res = NS(chats=[NS(id=9, username='iptv_deals', title='IPTV deals', broadcast=True, megagroup=False), NS(id=10, username=None, title='x', broadcast=True, megagroup=False)])
+    assert tgwatch.process_name_results(name_res, disc, 300) == 1 and 'iptv_deals' in disc['channels']
+    # a message saved by search is not saved again when the channel is watched later
+    n, hit = tgwatch.handle_messages(cfg, patterns, 'good_chan', [(5, when, 'fresh IPTV list')], {})
+    assert hit == 0 and len(list(alerts.rglob('*.txt'))) == 1
+
+
+def test_webui_discovered_list_and_dismiss(tmp_path):
+    from pystemon import tgwatch
+    from pystemon.webui import Store
+    (tmp_path / 'data' / 'alerts').mkdir(parents=True)
+    cfg = tmp_path / 'p.yaml'
+    cfg.write_text("storage:\n  a:\n    storage-classname: FileStorage\n    dir: '%s'\n" % (tmp_path / 'data' / 'alerts'))
+    disc = {'channels': {n: {'title': n, 'hits': h, 'via': ['posts'], 'last': 1} for n, h in (('aaa_chan', 1), ('bbb_chan', 5), ('ccc_chan', 2))}, 'seen': {}}
+    tgwatch.save_discovered(str(tmp_path / 'data' / 'discovered.json'), disc)
+    store = Store(str(cfg))
+    assert [c['name'] for c in store.discovered(['ccc_chan'])] == ['bbb_chan', 'aaa_chan']   # watched ones are hidden, most hits first
+    store.dismiss_channel('bbb_chan')
+    assert [c['name'] for c in store.discovered([])] == ['ccc_chan', 'aaa_chan']

@@ -61,6 +61,13 @@
        Private invite links are not supported on purpose. Saving applies it straight away.</p>
     <textarea id="chanText" rows="8" cols="50" placeholder="@example_channel"></textarea>
   </div>
+  <div class="card" id="discCard" hidden>
+    <h2>Discovered channels</h2>
+    <p class="muted">Found by Telegram's own search using your search terms (about once an hour, slowly).
+       "posts" means a message in the channel matched your rules, "name" means its name matched the words.
+       Add the ones worth following; they then get watched like the others.</p>
+    <div id="discRows" class="muted">Nothing found yet.</div>
+  </div>
   <div class="card" id="basicCard">
     <h2>Basic settings</h2>
     <div id="siteRows"></div>

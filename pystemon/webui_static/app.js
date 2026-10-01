@@ -43,7 +43,7 @@
     return api('status').then(function (s) {
       if (!state.mode) {
         state.mode = s.mode; document.title = s.title; document.querySelector('header strong').textContent = s.title;
-        if (s.mode === 'telegram') { $('basicCard').hidden = true; $('chanCard').hidden = false; }
+        if (s.mode === 'telegram') { $('basicCard').hidden = true; $('chanCard').hidden = false; $('discCard').hidden = false; loadDiscovered(); setInterval(loadDiscovered, 60000); loadConfig(); }
         else { checkIp(); setInterval(checkIp, 300000); }
       }
       var p = $('state'); p.textContent = s.running ? 'running' : 'stopped'; p.className = 'pill ' + (s.running ? 'run' : 'stop');
@@ -177,10 +177,12 @@
     var d = el('div', 'srow');
     var mk = function (ph, val, w) { var i = el('input'); i.placeholder = ph; i.value = val == null ? '' : val; return i; };
     var a = mk('search term (regex)', v.search), b = mk('note', v.description), c = mk('min count', v.count), x = mk('ignore if also matches', v.exclude);
+    var q = mk('Telegram search words (optional)', v.query);
+    if (state.mode !== 'telegram') { q = null; }
     c.type = 'number'; c.min = 1;
     var rm = el('button', '', 'Remove'); rm.onclick = function () { d.remove(); };
-    [a, b, c, x, rm].forEach(function (n) { d.appendChild(n); });
-    d.get = function () { return { search: a.value, description: b.value, count: c.value, exclude: x.value }; };
+    [a, b, c, x, q, rm].forEach(function (n) { if (n) { d.appendChild(n); } });
+    d.get = function () { var o = { search: a.value, description: b.value, count: c.value, exclude: x.value }; if (q) { o.query = q.value; } return o; };
     return d;
   }
   function loadConfig() {
@@ -225,6 +227,23 @@
   }
   $('btnSave').onclick = function () { $('saveMsg').textContent = 'Saving...'; api('config', { form: collect() }).then(saved).catch(function (e) { $('saveMsg').textContent = 'Not saved: ' + e.message; }); };
   $('btnSaveRaw').onclick = function () { api('config', { raw: $('raw').value }).then(saved).catch(function (e) { toast('Not saved: ' + e.message); }); };
+
+  // ---- discovered channels (telegram mode)
+  function loadDiscovered() {
+    api('discovered').then(function (r) {
+      var box = $('discRows'); box.textContent = '';
+      if (!r.channels.length) { box.textContent = 'Nothing found yet.'; return; }
+      r.channels.forEach(function (c) {
+        var row = el('div', 'row');
+        row.appendChild(el('strong', '', '@' + c.name));
+        row.appendChild(el('span', 'muted', c.title + '  ·  ' + c.hits + ' matching post' + (c.hits === 1 ? '' : 's') + '  ·  ' + c.via.join(', ')));
+        var add = el('button', 'primary', 'Add'), no = el('button', '', 'Dismiss');
+        add.onclick = function () { api('discovered', { action: 'add', name: c.name }).then(function () { toast('Added @' + c.name); loadConfig(); loadDiscovered(); }).catch(function (e) { toast(e.message); }); };
+        no.onclick = function () { api('discovered', { action: 'dismiss', name: c.name }).then(loadDiscovered).catch(function (e) { toast(e.message); }); };
+        row.appendChild(add); row.appendChild(no); box.appendChild(row);
+      });
+    }).catch(function () {});
+  }
 
   // ---- public IP watch: warn when the address Pastebin sees is not the one the user confirmed
   var curIp = '';
