@@ -113,7 +113,7 @@
     api('delete', { ids: ids }).then(function (r) {
       toast('Deleted ' + r.deleted);
       state.selected = {};
-      if (state.current && ids.indexOf(state.current) >= 0) { state.current = null; $('vbody').textContent = ''; $('vhead').textContent = 'Pick a paste on the left'; }
+      if (state.current && ids.indexOf(state.current) >= 0) { state.current = null; $('pastes').classList.add('noview'); $('vbody').textContent = ''; $('vhead').textContent = 'Pick a paste on the left'; }
       return loadList();
     }).catch(function (e) { toast(e.message); });
   };
@@ -123,7 +123,7 @@
 
   // ---- viewer
   function openPaste(f) {
-    state.current = f.id; renderTree();
+    state.current = f.id; $('pastes').classList.remove('noview'); renderTree();
     $('vhead').textContent = 'Loading...'; $('vbody').textContent = '';
     api('paste?id=' + encodeURIComponent(f.id)).then(function (r) {
       var head = (f.site ? f.site + ' / ' : '') + f.name + '  ·  ' + human(r.size) + (r.truncated ? '  ·  first 1 MB only' : '');
