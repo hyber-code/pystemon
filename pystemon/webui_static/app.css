@@ -1,4 +1,5 @@
 :root{--bg:#fff;--panel:#f3f3f3;--fg:#1f2328;--muted:#6e7781;--line:#d0d7de;--sel:#cfe3ff;--acc:#0b5fff;--bad:#c62828;--hit:#ffe58a}
+[hidden]{display:none !important}
 @media (prefers-color-scheme:dark){:root{--bg:#1e1e1e;--panel:#252526;--fg:#d4d4d4;--muted:#8b949e;--line:#3c3c3c;--sel:#094771;--acc:#4da3ff;--bad:#f48771;--hit:#6b5a00}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
