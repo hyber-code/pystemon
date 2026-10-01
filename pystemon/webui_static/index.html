@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pystemon</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <strong>pystemon</strong>
+  <span id="state" class="pill">...</span>
+  <span id="uptime" class="muted"></span>
+  <span class="spacer"></span>
+  <button id="btnStart">Start</button>
+  <button id="btnStop">Stop</button>
+  <button id="btnRestart">Restart</button>
+  <nav>
+    <button class="tab on" data-tab="pastes">Pastes</button>
+    <button class="tab" data-tab="settings">Settings</button>
+    <button class="tab" data-tab="log">Log</button>
+  </nav>
+</header>
+<div id="toast" hidden></div>
+
+<main id="pastes" class="view">
+  <aside>
+    <div class="bar">
+      <input id="filter" type="search" placeholder="Filter by name or site">
+    </div>
+    <div class="bar">
+      <label><input id="selAll" type="checkbox"> All shown</label>
+      <span class="spacer"></span>
+      <span id="selCount" class="muted"></span>
+      <button id="btnDelete" class="danger" disabled>Delete</button>
+    </div>
+    <div id="tree" role="tree"></div>
+    <div id="listInfo" class="muted pad"></div>
+  </aside>
+  <section id="viewer">
+    <div id="vhead" class="bar muted">Pick a paste on the left</div>
+    <pre id="vbody"></pre>
+  </section>
+</main>
+
+<main id="settings" class="view" hidden>
+  <div class="card">
+    <h2>What to look for</h2>
+    <p class="muted">Each line is a search term (a regular expression, case-insensitive). A plain word works.
+       Pastes that contain a match are kept in the Matched folder.</p>
+    <div id="searchRows"></div>
+    <button id="addSearch">Add a search term</button>
+  </div>
+  <div class="card">
+    <h2>Basic settings</h2>
+    <div id="siteRows"></div>
+    <label class="row">Local source address (network.ip)
+      <input id="netIp" placeholder="empty = automatic"></label>
+    <p class="muted">Leave this empty unless the machine has several networks. This is NOT the address you whitelist at Pastebin.</p>
+    <div class="row">Public address Pastebin sees:
+      <strong id="pubIp">unknown</strong>
+      <button id="btnPubIp">Check now</button></div>
+    <p class="muted">Whitelist this one in your Pastebin account. It is changed on pastebin.com, not here.</p>
+    <label class="row"><input id="emailAlert" type="checkbox"> Send alert emails (SMTP details stay in the config file)</label>
+  </div>
+  <div class="card">
+    <button id="btnSave" class="primary">Save and apply</button>
+    <span id="saveMsg" class="muted"></span>
+    <p class="muted">Saving rewrites the config file and keeps the old one as <code>.bak</code>. Comments inside the file are not kept.</p>
+  </div>
+  <div class="card">
+    <h2>Using this page behind Nginx Proxy Manager</h2>
+    <p>Create a Proxy Host with your domain, forward to <code id="npmTarget">...</code> (scheme http), turn SSL on,
+       leave Websockets off and leave the Advanced box empty. Do not put a path after the port.</p>
+    <p class="muted">You are viewing this at: <code id="here"></code></p>
+  </div>
+  <details class="card">
+    <summary>Advanced: edit the whole config file</summary>
+    <textarea id="raw" spellcheck="false"></textarea>
+    <button id="btnSaveRaw">Save file and apply</button>
+  </details>
+</main>
+
+<main id="log" class="view" hidden>
+  <pre id="logBody"></pre>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
