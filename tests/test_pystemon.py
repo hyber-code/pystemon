@@ -330,3 +330,21 @@ def test_webui_starred_pastes_are_protected(tmp_path):
         assert False, 'should refuse a missing paste'
     except ValueError:
         pass
+
+
+def test_webui_ip_ack_roundtrip(tmp_path):
+    """The confirmed whitelisted IP is stored next to the favourites and validated."""
+    from pystemon.webui import Store
+    (tmp_path / 'data' / 'alerts').mkdir(parents=True)
+    cfg = tmp_path / 'p.yaml'
+    cfg.write_text("storage:\n  archive:\n    storage-classname: FileStorage\n    save: yes\n    dir: '%s'\n" % (tmp_path / 'data' / 'alerts'))
+    store = Store(str(cfg))
+    assert store.ip_ack() == ''
+    store.set_ip_ack('1.2.3.4')
+    assert Store(str(cfg)).ip_ack() == '1.2.3.4'
+    for bad in ('x', '1.2.3', '<script>'):
+        try:
+            store.set_ip_ack(bad)
+            assert False, 'should refuse ' + bad
+        except ValueError:
+            pass

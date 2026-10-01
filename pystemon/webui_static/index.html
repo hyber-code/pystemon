@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pystemon</title>
 <link rel="stylesheet" href="app.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <header>
@@ -15,12 +16,14 @@
   <button id="btnStart">Start</button>
   <button id="btnStop">Stop</button>
   <button id="btnRestart">Restart</button>
+  <button id="btnTheme" title="Colour theme: system, light or dark">Theme: system</button>
   <nav>
     <button class="tab on" data-tab="pastes">Pastes</button>
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="log">Log</button>
   </nav>
 </header>
+<div id="ipbanner" hidden><span id="ipmsg"></span> <a href="https://pastebin.com/doc_scraping_api" target="_blank" rel="noopener">Open Pastebin</a> <button id="ipok">I updated it</button></div>
 <div id="toast" hidden></div>
 
 <main id="pastes" class="view noview">

@@ -289,6 +289,24 @@ class Store:
             json.dump(sorted(favs), f)
         os.replace(tmp, path)
 
+    # -- whitelisted-IP bookkeeping: remembers which public IP the user confirmed at Pastebin
+    def _ip_file(self):
+        path = self._fav_file()
+        return os.path.join(os.path.dirname(path), 'whitelisted_ip.txt') if path else None
+
+    def ip_ack(self):
+        try:
+            with open(self._ip_file(), encoding='utf-8') as f:
+                return f.read(64).strip()
+        except (OSError, TypeError):
+            return ''
+
+    def set_ip_ack(self, ip):
+        if not re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', ip):
+            raise ValueError('not an IPv4 address')
+        with open(self._ip_file(), 'w', encoding='utf-8') as f:
+            f.write(ip)
+
     def set_fav(self, ident, on):
         if not self.resolve(ident):
             raise ValueError('paste not found')
@@ -443,7 +461,19 @@ def local_ip():
         return ''
 
 
-def public_ip():
+_ip_cache = {'t': 0.0, 'ip': ''}
+
+
+def public_ip(cached=False):
+    if cached and time.time() - _ip_cache['t'] < 60 and _ip_cache['ip']:
+        return _ip_cache['ip']
+    ip = _public_ip_lookup()
+    if ip:
+        _ip_cache.update(t=time.time(), ip=ip)
+    return ip
+
+
+def _public_ip_lookup():
     for url in ('https://api4.ipify.org', 'https://ifconfig.me/ip'):
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'pystemon-web'})
@@ -454,6 +484,33 @@ def public_ip():
         except Exception:
             continue
     return ''
+
+
+PASTEBIN_IP_URL = 'https://pastebin.com/doc_scraping_api'
+
+
+def ntfy_send(url, title, message):
+    req = urllib.request.Request(url, data=message.encode('utf-8'), method='POST',
+                                 headers={'Title': title, 'Tags': 'warning', 'Priority': 'high', 'Click': PASTEBIN_IP_URL, 'User-Agent': 'pystemon-web'})
+    with urllib.request.urlopen(req, timeout=10):
+        pass
+
+
+def ip_watch_loop(store, ntfy_url, interval=300):
+    """Push a phone alert (ntfy) once per new public IP that has not been confirmed at Pastebin."""
+    last_sent = ''
+    while True:
+        try:
+            ip = public_ip()
+            if ip and ip != store.ip_ack() and ip != last_sent:
+                ntfy_send(ntfy_url, 'pystemon: Pastebin IP changed',
+                          'New public IP: %s\n(old: %s)\n\nUpdate it here (tap this notification to open):\n%s\n\n'
+                          'Then tap "I updated it" on the pystemon page.' % (ip, store.ip_ack() or 'none', PASTEBIN_IP_URL))
+                last_sent = ip
+                logger.info('ntfy sent for new public IP %s', ip)
+        except Exception as e:
+            logger.warning('ip watch failed: %s', e)
+        time.sleep(interval)
 
 
 # --------------------------------------------------------------------------- HTTP server
@@ -530,7 +587,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if path in ('/', '/index.html'):
                 return self._static('index.html')
-            if path in ('/app.js', '/app.css'):
+            if path in ('/app.js', '/app.css', '/theme.js'):
                 return self._static(path[1:])
             if path == '/api/status':
                 return self._send(200, self._status())
@@ -548,7 +605,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     raw = f.read()
                 return self._send(200, {'form': public_view(load_yaml(self.server.config_path)), 'raw': raw})
             if path == '/api/publicip':
-                return self._send(200, {'ip': public_ip()})
+                ip = public_ip(cached=True)
+                return self._send(200, {'ip': ip, 'ack': self.server.store.ip_ack()})
             self._send(404, {'error': 'not found'})
         except Exception as e:
             logger.error('GET %s failed: %s', path, e)
@@ -576,6 +634,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(400, {'error': 'ids must be a list'})
                 n, kept = self.server.store.delete([str(i) for i in ids])
                 return self._send(200, {'ok': True, 'deleted': n, 'kept_starred': kept})
+            elif path == '/api/ipack':
+                self.server.store.set_ip_ack(str(body.get('ip', '')))
+                return self._send(200, {'ok': True})
             elif path == '/api/star':
                 on = self.server.store.set_fav(str(body.get('id', '')), bool(body.get('on')))
                 return self._send(200, {'ok': True, 'fav': on})
@@ -636,6 +697,9 @@ def main(argv=None):
         sys.exit('Set PYSTEMON_WEB_PASSWORD (pastes can hold leaked secrets), or use --host 127.0.0.1')
     scraper = Scraper(args.config)
     server = Server((args.host, args.port), args.config, password, scraper)
+    ntfy_url = os.environ.get('PYSTEMON_NTFY_URL', '').strip()
+    if ntfy_url:
+        threading.Thread(target=ip_watch_loop, args=(server.store, ntfy_url), daemon=True).start()
 
     def shutdown(*_):
         threading.Thread(target=server.shutdown, daemon=True).start()

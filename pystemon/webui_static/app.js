@@ -218,7 +218,23 @@
   $('btnSave').onclick = function () { $('saveMsg').textContent = 'Saving...'; api('config', { form: collect() }).then(saved).catch(function (e) { $('saveMsg').textContent = 'Not saved: ' + e.message; }); };
   $('btnSaveRaw').onclick = function () { api('config', { raw: $('raw').value }).then(saved).catch(function (e) { toast('Not saved: ' + e.message); }); };
 
+  // ---- public IP watch: warn when the address Pastebin sees is not the one the user confirmed
+  var curIp = '';
+  function checkIp() {
+    api('publicip').then(function (r) {
+      curIp = r.ip || '';
+      var bad = curIp && r.ack !== curIp;
+      $('ipbanner').hidden = !bad;
+      if (bad) {
+        $('ipmsg').textContent = r.ack ? 'Public IP changed from ' + r.ack + ' to ' + curIp + '. Whitelist the new one at Pastebin or scraping will stop.'
+          : 'Public IP is ' + curIp + '. Confirm it is whitelisted at Pastebin.';
+      }
+    }).catch(function () {});
+  }
+  $('ipok').onclick = function () { api('ipack', { ip: curIp }).then(function () { $('ipbanner').hidden = true; toast('Saved'); }).catch(function (e) { toast(e.message); }); };
+
   // ---- go
+  checkIp(); setInterval(checkIp, 300000);
   showTab(location.hash.slice(1));
   loadList(); refreshStatus().then(function () { if (!$('log').hidden) { logToBottom(); } });
   setInterval(refreshStatus, 5000);
