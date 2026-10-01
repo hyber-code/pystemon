@@ -39,6 +39,13 @@
   window.addEventListener('hashchange', function () { showTab(location.hash.slice(1)); });
 
   // ---- status and controls
+  function uptimeText(sec) {
+    var m = Math.floor(sec / 60), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+    m = m % 60;
+    if (d) { return d + 'd ' + h + 'h ' + m + 'm'; }
+    if (h) { return h + 'h ' + m + 'm'; }
+    return Math.max(m, 0) + 'm';
+  }
   function refreshStatus() {
     return api('status').then(function (s) {
       if (!state.mode) {
@@ -47,7 +54,7 @@
         else { checkIp(); setInterval(checkIp, 300000); }
       }
       var p = $('state'); p.textContent = s.running ? 'running' : 'stopped'; p.className = 'pill ' + (s.running ? 'run' : 'stop');
-      $('uptime').textContent = s.running ? 'up ' + Math.floor(s.uptime / 60) + ' min (pid ' + s.pid + ')' : '';
+      $('uptime').textContent = s.running ? 'up ' + uptimeText(s.uptime) : '';
       $('btnStart').disabled = s.running; $('btnStop').disabled = !s.running; $('btnRestart').disabled = false;
       var lv = $('log'), atBottom = lv.scrollHeight - lv.scrollTop - lv.clientHeight < 40;
       $('logBody').textContent = s.log.join('\n');
