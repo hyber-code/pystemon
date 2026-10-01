@@ -41,6 +41,11 @@
   // ---- status and controls
   function refreshStatus() {
     return api('status').then(function (s) {
+      if (!state.mode) {
+        state.mode = s.mode; document.title = s.title; document.querySelector('header strong').textContent = s.title;
+        if (s.mode === 'telegram') { $('basicCard').hidden = true; $('chanCard').hidden = false; }
+        else { checkIp(); setInterval(checkIp, 300000); }
+      }
       var p = $('state'); p.textContent = s.running ? 'running' : 'stopped'; p.className = 'pill ' + (s.running ? 'run' : 'stop');
       $('uptime').textContent = s.running ? 'up ' + Math.floor(s.uptime / 60) + ' min (pid ' + s.pid + ')' : '';
       $('btnStart').disabled = s.running; $('btnStop').disabled = !s.running; $('btnRestart').disabled = false;
@@ -196,13 +201,16 @@
         });
         sb.appendChild(row);
       });
+      $('chanText').value = (r.form.channels || []).join('\n');
       $('netIp').value = r.form.network_ip; $('emailAlert').checked = r.form.email_alert;
     }).catch(function (e) { toast(e.message); });
   }
   $('addSearch').onclick = function () { $('searchRows').appendChild(searchRow({})); };
   $('btnPubIp').onclick = function () { $('pubIp').textContent = 'checking...'; api('publicip').then(function (r) { $('pubIp').textContent = r.ip || 'could not detect'; }); };
   function collect() {
-    var form = { search: [], sites: {}, network_ip: $('netIp').value, email_alert: $('emailAlert').checked };
+    var form = { search: [], sites: {} };
+    if (state.mode === 'telegram') { form.channels = $('chanText').value.split('\n'); }
+    else { form.network_ip = $('netIp').value; form.email_alert = $('emailAlert').checked; }
     $('searchRows').querySelectorAll('.srow').forEach(function (r) { form.search.push(r.get()); });
     $('siteRows').querySelectorAll('[data-site]').forEach(function (card) {
       var o = {};
@@ -234,7 +242,6 @@
   $('ipok').onclick = function () { api('ipack', { ip: curIp }).then(function () { $('ipbanner').hidden = true; toast('Saved'); }).catch(function (e) { toast(e.message); }); };
 
   // ---- go
-  checkIp(); setInterval(checkIp, 300000);
   showTab(location.hash.slice(1));
   loadList(); refreshStatus().then(function () { if (!$('log').hidden) { logToBottom(); } });
   setInterval(refreshStatus, 5000);

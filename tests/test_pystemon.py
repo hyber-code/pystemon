@@ -361,3 +361,46 @@ def test_stats_counts_checked_and_matched(tmp_path, monkeypatch):
     stats.record(True)
     assert stats.last_hours(str(f), 24) == (2, 1)
     assert stats.last_hours(str(tmp_path / 'missing.json'), 24) == (0, 0)
+
+
+def test_tgwatch_channel_names_and_matching(tmp_path):
+    """Channel links normalise to names (invite links are refused); matching follows pystemon rules; hits are saved and not repeated."""
+    import datetime
+    from pystemon import tgwatch
+    n = tgwatch.normalise_channel
+    assert n('@Some_Chan') == 'Some_Chan' and n('https://t.me/Some_Chan/123') == 'Some_Chan' and n('t.me/s/Some_Chan') == 'Some_Chan'
+    assert n('https://t.me/+AbCdEf123') == '' and n('https://t.me/joinchat/xyz') == '' and n('hi') == ''
+    patterns = tgwatch.compile_patterns([
+        {'search': 'iptv', 'description': 'iptv'},
+        {'search': r'mega\.nz', 'count': 2, 'description': 'mega x2'},
+        {'search': 'free', 'exclude': 'scam'},
+    ])
+    assert tgwatch.match_text(patterns, 'New IPTV list') == ['iptv']
+    assert tgwatch.match_text(patterns, 'mega.nz/a and mega.nz/b') == ['mega x2']
+    assert tgwatch.match_text(patterns, 'mega.nz/a only') == []
+    assert tgwatch.match_text(patterns, 'free stuff') == ['free'] and tgwatch.match_text(patterns, 'free scam') == []
+    alerts = tmp_path / 'data' / 'alerts'
+    cfg = {'storage': {'a': {'storage-classname': 'FileStorage', 'dir': str(alerts)}}}
+    when = datetime.datetime(2026, 10, 1, 9, 12, tzinfo=datetime.timezone.utc)
+    state = {}
+    checked, hit = tgwatch.handle_messages(cfg, patterns, 'chan', [(10, when, 'old iptv'), (11, when, 'nothing'), (12, when, '')], state)
+    assert (checked, hit) == (2, 1) and state == {'chan': 12}
+    files = list(alerts.rglob('*.txt'))
+    assert len(files) == 1 and 'chan' in files[0].parts
+    assert 'https://t.me/chan/10' in files[0].read_text() and 'Matched: iptv' in files[0].read_text()
+
+
+def test_webui_telegram_mode_form(tmp_path, monkeypatch):
+    """Telegram mode: channels are validated and normalised through the same save path as search terms."""
+    from pystemon import webui
+    monkeypatch.setitem(webui.WEB, 'mode', 'telegram')
+    base = {'storage': {'a': {'storage-classname': 'FileStorage', 'dir': str(tmp_path)}}}
+    data = webui.apply_form(dict(base), {'channels': ['https://t.me/Alpha_One', '@alpha_one', 'beta_two', ''], 'search': []})
+    assert data['channels'] == ['@Alpha_One', '@beta_two']
+    try:
+        webui.apply_form(dict(base), {'channels': ['https://t.me/+secretinvite']})
+        assert False, 'invite link must be refused'
+    except ValueError:
+        pass
+    webui.validate_text(str(tmp_path / 'x.yaml'), webui.yaml.safe_dump(data))
+    assert webui.public_view(data)['channels'] == ['@Alpha_One', '@beta_two']

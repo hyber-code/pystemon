@@ -38,6 +38,7 @@ import yaml
 
 logger = logging.getLogger('pystemon.web')
 
+WEB = {'mode': 'pastes', 'title': 'pystemon'}
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui_static')
 MAX_VIEW_BYTES = 1024 * 1024        # how much of one paste the viewer reads
 MAX_LIST = 5000                     # newest files shown in the tree
@@ -86,7 +87,10 @@ class Scraper:
         with self.lock:
             if self.running():
                 return False, 'already running'
-            cmd = [sys.executable, '-u', self._script(), '-c', self.config_path] + self.extra_args
+            if WEB['mode'] == 'telegram':
+                cmd = [sys.executable, '-u', '-m', 'pystemon.tgwatch', '-c', self.config_path, 'run']
+            else:
+                cmd = [sys.executable, '-u', self._script(), '-c', self.config_path] + self.extra_args
             self.log.append('--- starting: {} ---'.format(' '.join(cmd)))
             try:
                 self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -155,6 +159,13 @@ def validate_text(path, text):
         re.compile(pat)
         if item.get('exclude'):
             re.compile(item['exclude'])
+    if WEB['mode'] == 'telegram':
+        from pystemon import tgwatch
+        tgwatch.alerts_root(data)
+        for c in data.get('channels') or []:
+            if not tgwatch.normalise_channel(c):
+                raise ValueError('not a public channel name: %s (use @name or https://t.me/name; invite links are not supported)' % c)
+        return data
     from pystemon.config import PystemonConfig
     tmp = os.path.join(os.path.dirname(os.path.abspath(path)), '.pystemon-check.yaml')
     try:
@@ -203,7 +214,8 @@ def public_view(data):
     return {'search': search, 'sites': sites,
             'network_ip': (data.get('network') or {}).get('ip') or '',
             'email_alert': bool((data.get('email') or {}).get('alert')),
-            'logging_level': data.get('logging-level', 'INFO')}
+            'logging_level': data.get('logging-level', 'INFO'),
+            'channels': [str(c) for c in (data.get('channels') or [])]}
 
 
 def apply_form(data, form):
@@ -223,6 +235,20 @@ def apply_form(data, form):
                 entry['exclude'] = str(item['exclude']).strip()
             new.append(entry)
         data['search'] = new
+    if 'channels' in form:
+        from pystemon import tgwatch
+        seen, chans = set(), []
+        for c in form['channels']:
+            c = str(c).strip()
+            if not c:
+                continue
+            name = tgwatch.normalise_channel(c)
+            if not name:
+                raise ValueError('not a public channel name: %s (use @name or https://t.me/name)' % c)
+            if name.lower() not in seen:
+                seen.add(name.lower())
+                chans.append('@' + name)
+        data['channels'] = chans
     for name, vals in (form.get('sites') or {}).items():
         site = (data.get('site') or {}).get(name)
         if site is None:
@@ -505,8 +531,8 @@ def daily_summary_loop(store, ntfy_url, stats_path, interval=86400):
             checked, matched = stats.last_hours(stats_path, 24)
             saved = store.listing().get('total', 0)
             req = urllib.request.Request(
-                ntfy_url, method='POST', headers={'Title': 'pystemon: last 24 hours', 'Tags': 'bar_chart', 'User-Agent': 'pystemon-web'},
-                data=('Pastes checked: %d\nMatches found: %d\nMatches stored now: %d' % (checked, matched, saved)).encode())
+                ntfy_url, method='POST', headers={'Title': WEB['title'] + ': last 24 hours', 'Tags': 'bar_chart', 'User-Agent': 'pystemon-web'},
+                data=('Checked: %d\nMatches found: %d\nMatches stored now: %d' % (checked, matched, saved)).encode())
             urllib.request.urlopen(req, timeout=10).close()
         except Exception as e:
             logger.warning('daily summary failed: %s', e)
@@ -682,7 +708,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         st = self.server.scraper.status()
         port = self.server.server_address[1]
         st.update({'log': list(self.server.scraper.log)[-LOG_LINES:], 'lan_ip': local_ip(), 'port': port,
-                   'config': os.path.abspath(self.server.config_path), 'time': int(time.time())})
+                   'config': os.path.abspath(self.server.config_path), 'time': int(time.time()),
+                   'mode': WEB['mode'], 'title': WEB['title']})
         return st
 
 
@@ -703,8 +730,12 @@ def main(argv=None):
     p.add_argument('--host', default='0.0.0.0', help='address to listen on (default all)')
     p.add_argument('--port', type=int, default=8080)
     p.add_argument('--no-autostart', action='store_true', help='do not start the scraper when this page starts')
+    p.add_argument('--mode', choices=['pastes', 'telegram'], default='pastes', help='what the page controls')
+    p.add_argument('--title', default='', help='name shown in the header')
     p.add_argument('--debug', action='store_true')
     args = p.parse_args(argv)
+    WEB['mode'] = args.mode
+    WEB['title'] = args.title or ('tgwatch' if args.mode == 'telegram' else 'pystemon')
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
     if not os.path.isfile(args.config):
@@ -722,7 +753,8 @@ def main(argv=None):
     server = Server((args.host, args.port), args.config, password, scraper)
     ntfy_url = os.environ.get('PYSTEMON_NTFY_URL', '').strip()
     if ntfy_url:
-        threading.Thread(target=ip_watch_loop, args=(server.store, ntfy_url), daemon=True).start()
+        if WEB['mode'] == 'pastes':
+            threading.Thread(target=ip_watch_loop, args=(server.store, ntfy_url), daemon=True).start()
         if stats_file:
             threading.Thread(target=daily_summary_loop, args=(server.store, ntfy_url, stats_file), daemon=True).start()
 
