@@ -348,3 +348,16 @@ def test_webui_ip_ack_roundtrip(tmp_path):
             assert False, 'should refuse ' + bad
         except ValueError:
             pass
+
+
+def test_stats_counts_checked_and_matched(tmp_path, monkeypatch):
+    """Hourly counters record every checked paste and the matches among them."""
+    from pystemon import stats
+    f = tmp_path / 'stats.json'
+    monkeypatch.setenv('PYSTEMON_STATS_FILE', str(f))
+    monkeypatch.setattr(stats, '_last_flush', [0.0])
+    stats.record(False)
+    monkeypatch.setattr(stats, '_last_flush', [0.0])
+    stats.record(True)
+    assert stats.last_hours(str(f), 24) == (2, 1)
+    assert stats.last_hours(str(tmp_path / 'missing.json'), 24) == (0, 0)

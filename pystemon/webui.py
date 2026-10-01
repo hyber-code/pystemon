@@ -496,6 +496,23 @@ def ntfy_send(url, title, message):
         pass
 
 
+def daily_summary_loop(store, ntfy_url, stats_path, interval=86400):
+    """Push one summary per day: pastes checked and matches in the last 24 hours."""
+    from pystemon import stats
+    time.sleep(60)
+    while True:
+        try:
+            checked, matched = stats.last_hours(stats_path, 24)
+            saved = store.listing().get('total', 0)
+            req = urllib.request.Request(
+                ntfy_url, method='POST', headers={'Title': 'pystemon: last 24 hours', 'Tags': 'bar_chart', 'User-Agent': 'pystemon-web'},
+                data=('Pastes checked: %d\nMatches found: %d\nMatches stored now: %d' % (checked, matched, saved)).encode())
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception as e:
+            logger.warning('daily summary failed: %s', e)
+        time.sleep(interval)
+
+
 def ip_watch_loop(store, ntfy_url, interval=300):
     """Push a phone alert (ntfy) once per new public IP that has not been confirmed at Pastebin."""
     last_sent = ''
@@ -695,11 +712,19 @@ def main(argv=None):
     password = os.environ.get('PYSTEMON_WEB_PASSWORD', '')
     if not password and args.host not in ('127.0.0.1', 'localhost', '::1'):
         sys.exit('Set PYSTEMON_WEB_PASSWORD (pastes can hold leaked secrets), or use --host 127.0.0.1')
+    stats_file = None
+    _tmp_store = Store(args.config)
+    _favp = _tmp_store._fav_file()
+    if _favp:
+        stats_file = os.path.join(os.path.dirname(_favp), 'stats.json')
+        os.environ['PYSTEMON_STATS_FILE'] = stats_file
     scraper = Scraper(args.config)
     server = Server((args.host, args.port), args.config, password, scraper)
     ntfy_url = os.environ.get('PYSTEMON_NTFY_URL', '').strip()
     if ntfy_url:
         threading.Thread(target=ip_watch_loop, args=(server.store, ntfy_url), daemon=True).start()
+        if stats_file:
+            threading.Thread(target=daily_summary_loop, args=(server.store, ntfy_url, stats_file), daemon=True).start()
 
     def shutdown(*_):
         threading.Thread(target=server.shutdown, daemon=True).start()

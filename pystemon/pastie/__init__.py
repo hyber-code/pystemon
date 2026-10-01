@@ -1,4 +1,5 @@
 import logging.handlers
+from pystemon import stats
 import hashlib
 import time
 import threading
@@ -143,6 +144,7 @@ class Pastie():
             self.hash_pastie()
             # search for data in pastie
             self.search_content()
+            stats.record(self.matched)
         except Exception as e:
             logger.error('ERROR: unable to process pastie {0} for site {1}: {2}'.format(
                 self.id, self.site.name, e))
