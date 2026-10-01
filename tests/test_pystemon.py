@@ -280,3 +280,27 @@ def test_syntax_list_and_typo_warning(caplog):
 
 def test_lang_is_sent_lowercase():
     assert '&lang=php' in site(lang='PHP').archive_url
+
+
+def test_filestorage_save_all_off_keeps_only_matches(tmp_path):
+    """save-all: no must not write non-matching pastes, even when dir-all is set."""
+    from types import SimpleNamespace
+    from pystemon.storage.filestorage import FileStorage
+
+    def paste(pid, matched):
+        site = SimpleNamespace(site='example', name='example')
+        return SimpleNamespace(site=site, id=pid, filename=pid, pastie_content=b'data',
+                               pastie_metadata=None, matched=matched)
+
+    storage = FileStorage(name='t', **{'dir': str(tmp_path / 'alerts'), 'dir-all': str(tmp_path / 'archive'),
+                                        'save': True, 'save-all': False, 'compress': False})
+    assert storage.archive_dir is None
+    storage.__save_pastie__(paste('miss', False))
+    storage.__save_pastie__(paste('hit', True))
+    saved = [p.name for p in tmp_path.rglob('*') if p.is_file()]
+    assert saved == ['hit']
+
+    everything = FileStorage(name='t', **{'dir': str(tmp_path / 'a2'), 'dir-all': str(tmp_path / 'b2'),
+                                           'save': True, 'save-all': True, 'compress': False})
+    everything.__save_pastie__(paste('miss2', False))
+    assert [p.name for p in (tmp_path / 'b2').rglob('*') if p.is_file()] == ['miss2']

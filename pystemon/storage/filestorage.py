@@ -17,13 +17,15 @@ class FileStorage(PastieStorage):
 
     def __init_storage__(self, **kwargs):
         self.lookup = True
-        self.save_dir = kwargs.get('dir')
+        # `save` keeps the pastes that matched a search, `save-all` keeps every paste.
+        # A folder is only used when its switch is on, so `save-all: no` really means no.
+        self.save_dir = kwargs.get('dir') if kwargs.get('save') else None
         if self.save_dir is not None:
             logger.debug("{}:  saving directory: {}".format(self.name, self.save_dir))
             if not os.path.exists(self.save_dir):
                 logger.debug("{}: creating saving directory '{}'".format(self.name, self.save_dir))
                 os.makedirs(self.save_dir)
-        self.archive_dir = kwargs.get('dir-all')
+        self.archive_dir = kwargs.get('dir-all') if kwargs.get('save-all') else None
         if self.archive_dir is not None:
             logger.debug("{}:  saving directory: {}".format(self.name, self.archive_dir))
             if not os.path.exists(self.archive_dir):
