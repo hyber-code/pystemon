@@ -24,14 +24,19 @@
   }
   function human(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
 
-  // ---- tabs
-  document.querySelectorAll('.tab').forEach(function (b) {
-    b.onclick = function () {
-      document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === b); });
-      document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== b.dataset.tab; });
-      if (b.dataset.tab === 'settings') { loadConfig(); }
-    };
-  });
+  // ---- tabs (the current tab lives in the address as #pastes, #settings or #log, so a refresh keeps it)
+  var TABS = ['pastes', 'settings', 'log'];
+  function logToBottom() { var v = $('log'); v.scrollTop = v.scrollHeight; }
+  function showTab(name) {
+    if (TABS.indexOf(name) < 0) { name = 'pastes'; }
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x.dataset.tab === name); });
+    document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== name; });
+    try { history.replaceState(null, '', '#' + name); } catch (e) { /* address bar not available */ }
+    if (name === 'settings') { loadConfig(); }
+    if (name === 'log') { logToBottom(); }
+  }
+  document.querySelectorAll('.tab').forEach(function (b) { b.onclick = function () { showTab(b.dataset.tab); }; });
+  window.addEventListener('hashchange', function () { showTab(location.hash.slice(1)); });
 
   // ---- status and controls
   function refreshStatus() {
@@ -39,7 +44,9 @@
       var p = $('state'); p.textContent = s.running ? 'running' : 'stopped'; p.className = 'pill ' + (s.running ? 'run' : 'stop');
       $('uptime').textContent = s.running ? 'up ' + Math.floor(s.uptime / 60) + ' min (pid ' + s.pid + ')' : '';
       $('btnStart').disabled = s.running; $('btnStop').disabled = !s.running; $('btnRestart').disabled = false;
+      var lv = $('log'), atBottom = lv.scrollHeight - lv.scrollTop - lv.clientHeight < 40;
       $('logBody').textContent = s.log.join('\n');
+      if (atBottom) { logToBottom(); }
       $('npmTarget').textContent = (s.lan_ip || 'this-machine-ip') + ':' + s.port;
       $('here').textContent = location.origin + location.pathname;
     }).catch(function (e) { $('state').textContent = 'no connection'; });
@@ -194,7 +201,8 @@
   $('btnSaveRaw').onclick = function () { api('config', { raw: $('raw').value }).then(saved).catch(function (e) { toast('Not saved: ' + e.message); }); };
 
   // ---- go
-  loadList(); refreshStatus();
+  showTab(location.hash.slice(1));
+  loadList(); refreshStatus().then(function () { if (!$('log').hidden) { logToBottom(); } });
   setInterval(refreshStatus, 5000);
   setInterval(function () { if (!$('pastes').hidden && document.visibilityState === 'visible') { loadList(); } }, 30000);
 })();
